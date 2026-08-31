@@ -96,7 +96,7 @@ final class HomeDashboardPolicy
             $picked = [];
             if (is_array($saved[$persona] ?? null)) {
                 foreach ($saved[$persona] as $widget) {
-                    $widget = sanitize_key((string) $widget);
+                    $widget = strtolower(preg_replace('/[^a-z0-9_\-]/', '', (string) $widget) ?? '');
                     if ($widget !== '' && in_array($widget, $allowed, true) && !in_array($widget, $picked, true)) {
                         $picked[] = $widget;
                     }
@@ -111,10 +111,15 @@ final class HomeDashboardPolicy
     public function resolvePersona(array $roles): string
     {
         $roles = array_map(static fn(string $r): string => strtolower($r), $roles);
-        $has   = static fn(string $needle): bool => array_any(
-            $roles,
-            static fn(string $role): bool => str_contains($role, $needle)
-        );
+        $has   = static function (string $needle) use ($roles): bool {
+            foreach ($roles as $role) {
+                if (str_contains($role, $needle)) {
+                    return true;
+                }
+            }
+
+            return false;
+        };
 
         if ($has('engineer')) {
             return 'engineer';
