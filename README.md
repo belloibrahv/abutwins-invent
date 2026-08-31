@@ -40,8 +40,8 @@ Or directly:
 docker compose up -d
 ```
 
-- App: [http://localhost:8080/wp-admin/admin.php?page=atoms](http://localhost:8080/wp-admin/admin.php?page=atoms)
-- Phone PWA: [http://localhost:8080/atoms-app/](http://localhost:8080/atoms-app/)
+- App: [http://localhost:8081/wp-admin/admin.php?page=atoms](http://localhost:8081/wp-admin/admin.php?page=atoms)
+- Phone PWA: [http://localhost:8081/atoms-app/](http://localhost:8081/atoms-app/)
 - Login: `admin` / `admin`
 
 If the CLI container has already exited:

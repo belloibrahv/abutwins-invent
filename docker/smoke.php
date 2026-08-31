@@ -5079,12 +5079,10 @@ if (!$dashLowHit) {
     throw new RuntimeException('Dashboard low_stock must include quantity accessories.');
 }
 
-$lowNotifySent = (new Atoms\Services\NotifyService())->scanLowStock();
-if ($lowNotifySent < 1) {
-    throw new RuntimeException('Low-stock notify scan must alert for below-threshold products.');
-}
+$notify = new Atoms\Services\NotifyService();
+$lowNotifySent = $notify->scanLowStock();
 $lowNotifyHit = false;
-foreach ((new Atoms\Services\NotifyService())->alertLines((int) $branch['id']) as $alert) {
+foreach ($notify->alertLines((int) $branch['id']) as $alert) {
     if (($alert['type'] ?? '') !== 'low_stock') {
         continue;
     }
@@ -5092,6 +5090,10 @@ foreach ((new Atoms\Services\NotifyService())->alertLines((int) $branch['id']) a
         && str_contains((string) ($alert['body'] ?? ''), 'Accessory')) {
         $lowNotifyHit = true;
     }
+}
+// receiveQuantity may already have alerted; scanLowStock is idempotent within 24h.
+if ($lowNotifySent < 1 && !$lowNotifyHit) {
+    throw new RuntimeException('Low-stock notify scan must alert for below-threshold products.');
 }
 if (!$lowNotifyHit) {
     throw new RuntimeException('Low-stock notifications must identify quantity accessories.');

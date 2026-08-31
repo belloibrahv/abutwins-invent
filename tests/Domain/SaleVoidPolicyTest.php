@@ -31,6 +31,12 @@ final class SaleVoidPolicyTest extends TestCase
         (new SaleVoidPolicy())->assert('completed', false, ['350000000000001' => 'faulty']);
     }
 
+    public function test_quantity_only_sale_may_be_voided(): void
+    {
+        (new SaleVoidPolicy())->assert('completed', false, [], true);
+        $this->addToAssertionCount(1);
+    }
+
     public function test_debt_reminder_does_not_ask_to_edit_an_invoice(): void
     {
         $text = (new DebtReminder())->text('Ada', 'ATOMS', '₦50,000.00');

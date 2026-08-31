@@ -266,12 +266,17 @@ final class SaleService
         $sale = $this->get($id);
         $this->context->assertBranchAccess((int) $sale['branch_id']);
         $statuses = [];
+        $hasQuantityLines = false;
         foreach ($sale['items'] as $item) {
             if (!empty($item['imei_id']) && !empty($item['imei'])) {
                 $statuses[(string) $item['imei']] = (string) ($item['imei_status'] ?? '');
+                continue;
+            }
+            if (empty($item['imei_id'])) {
+                $hasQuantityLines = true;
             }
         }
-        $this->voids->assert((string) $sale['status'], $this->hasReturns($id), $statuses);
+        $this->voids->assert((string) $sale['status'], $this->hasReturns($id), $statuses, $hasQuantityLines);
         if (trim($reason) === '') {
             throw new DomainException('A void reason is required.');
         }

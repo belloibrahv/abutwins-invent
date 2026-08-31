@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('ATOMS_VERSION', '3.27.0');
+define('ATOMS_VERSION', '3.27.1');
 define('ATOMS_DB_VERSION', '1.8.0');
 define('ATOMS_FILE', __FILE__);
 define('ATOMS_PATH', plugin_dir_path(__FILE__));
