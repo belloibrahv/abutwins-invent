@@ -849,6 +849,452 @@
     }
   }
 
+  function homePersona() {
+    const roles = (state.bootstrap?.user?.roles || []).map((r) => String(r).toLowerCase());
+    if (roles.some((r) => r.includes('engineer'))) return 'engineer';
+    if (roles.some((r) => r.includes('vault') || r.includes('inventory') || r.includes('inbound'))) return 'stock';
+    if (roles.some((r) => r.includes('cashier') || r.includes('sales_officer'))) return 'cashier';
+    if (roles.some((r) => r.includes('accountant'))) return 'money';
+    if (roles.some((r) => r.includes('administrator') || r.includes('ceo') || r.includes('director'))) return 'owner';
+    if (roles.some((r) => r.includes('branch_manager') || r.includes('auditor'))) return 'manager';
+    return 'manager';
+  }
+
+  function homePersonaLabel(persona) {
+    const map = {
+      cashier: 'Sales floor',
+      stock: 'Stock desk',
+      engineer: 'Service desk',
+      money: 'Finance desk',
+      manager: 'Branch manager',
+      owner: 'Executive view',
+    };
+    return map[persona] || 'Operations';
+  }
+
+  function dashTake(rows, limit = 5) {
+    return (rows || []).slice(0, limit);
+  }
+
+  function dashQueueEmpty(message, ctaHref = '', ctaLabel = '') {
+    return `<div class="atoms-home-queue-empty">
+      <span class="material-symbols-outlined" aria-hidden="true">inbox</span>
+      <p>${escapeHtml(message)}</p>
+      ${ctaHref ? `<a class="atoms-btn ghost xs" href="${ctaHref}">${escapeHtml(ctaLabel)}</a>` : ''}
+    </div>`;
+  }
+
+  function homeDashboardManifest() {
+    return state.bootstrap?.settings?.home_dashboard || { layout: {}, widgets: [], personas: [], defaults: {} };
+  }
+
+  function homeUserPrefs() {
+    return state.bootstrap?.user?.home || {};
+  }
+
+  function homeKpiLayout(persona) {
+    const user = homeUserPrefs();
+    if (user.persona === persona && Array.isArray(user.effective_kpis) && user.effective_kpis.length) {
+      return user.effective_kpis;
+    }
+    const manifest = homeDashboardManifest();
+    const layout = manifest.layout || {};
+    if (Array.isArray(layout[persona]) && layout[persona].length) return layout[persona];
+    if (Array.isArray(manifest.defaults?.[persona]) && manifest.defaults[persona].length) return manifest.defaults[persona];
+    return manifest.defaults?.manager || [];
+  }
+
+  function homeShowTrends() {
+    const user = homeUserPrefs();
+    if (user && Object.prototype.hasOwnProperty.call(user, 'show_trends')) return !!user.show_trends;
+    return state.bootstrap?.settings?.home_show_trends !== false;
+  }
+
+  function homeQueueTabPref() {
+    const server = homeUserPrefs().queue_tab;
+    if (server && ['sales', 'money', 'stock', 'ops'].includes(server)) return server;
+    try {
+      const v = localStorage.getItem('atoms_home_queue_tab');
+      return ['sales', 'money', 'stock', 'ops'].includes(v) ? v : 'sales';
+    } catch (_) {
+      return 'sales';
+    }
+  }
+
+  let homeQueueTabSyncTimer = null;
+  function setHomeQueueTabPref(tab) {
+    try {
+      localStorage.setItem('atoms_home_queue_tab', tab);
+    } catch (_) { /* ignore */ }
+    clearTimeout(homeQueueTabSyncTimer);
+    homeQueueTabSyncTimer = setTimeout(() => {
+      api('home-layout', { method: 'POST', body: { queue_tab: tab } }).then((home) => {
+        if (state.bootstrap?.user) state.bootstrap.user.home = home;
+      }).catch(() => {});
+    }, 400);
+  }
+
+  function homeKpiSortListHtml(personaId, layoutIds, widgets, opts = {}) {
+    const picked = Array.isArray(layoutIds) ? [...layoutIds] : [];
+    const rest = widgets.map((w) => w.id).filter((id) => !picked.includes(id));
+    const order = [...picked, ...rest];
+    const idPrefix = opts.idPrefix || personaId;
+    const userAttr = opts.userCustomize ? ' data-user-customize="1"' : '';
+    return `<ul class="atoms-home-kpi-sort" data-persona="${escapeHtml(personaId)}"${userAttr}>
+      ${order.map((id) => {
+        const w = widgets.find((x) => x.id === id);
+        if (!w) return '';
+        const checked = picked.includes(id) ? 'checked' : '';
+        return `<li class="atoms-home-kpi-sort-item" draggable="true" data-id="${escapeHtml(id)}">
+          <span class="material-symbols-outlined atoms-home-kpi-drag" aria-hidden="true">drag_indicator</span>
+          <label class="atoms-home-kpi-check"><input type="checkbox" class="js-home-kpi-check" id="home-kpi-${escapeHtml(idPrefix)}-${escapeHtml(id)}" ${checked}> ${escapeHtml(w.label)}</label>
+        </li>`;
+      }).join('')}
+    </ul>`;
+  }
+
+  function initHomeKpiSortable(root = document) {
+    root.querySelectorAll('.atoms-home-kpi-sort').forEach((list) => {
+      let dragEl = null;
+      list.querySelectorAll('.atoms-home-kpi-sort-item').forEach((item) => {
+        item.addEventListener('dragstart', (e) => {
+          dragEl = item;
+          item.classList.add('is-dragging');
+          e.dataTransfer.effectAllowed = 'move';
+          try { e.dataTransfer.setData('text/plain', item.dataset.id || ''); } catch (_) { /* ignore */ }
+        });
+        item.addEventListener('dragend', () => {
+          dragEl?.classList.remove('is-dragging');
+          list.querySelectorAll('.atoms-home-kpi-sort-item').forEach((el) => el.classList.remove('is-over'));
+          dragEl = null;
+        });
+        item.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          if (!dragEl || dragEl === item) return;
+          const rect = item.getBoundingClientRect();
+          const after = (e.clientY - rect.top) > rect.height / 2;
+          list.insertBefore(dragEl, after ? item.nextSibling : item);
+        });
+        item.addEventListener('dragenter', () => item.classList.add('is-over'));
+        item.addEventListener('dragleave', () => item.classList.remove('is-over'));
+      });
+    });
+  }
+
+  function homeKpiCard(id, d) {
+    const imei = (d.imei && !Array.isArray(d.imei)) ? d.imei : {};
+    const qtyStock = d.quantity_stock || {};
+    const today = d.today || { net: 0, collected: 0, by_type: { retail: { net: 0 }, wholesale: { net: 0 } } };
+    const builders = {
+      sales_today: () => kpiCard('Sales today', money(today.net), `Retail ${money(today.by_type?.retail?.net || 0)}`),
+      cash_collected: () => kpiCard('Cash collected', money(today.collected), 'Received today'),
+      customer_balances: () => kpiCard('Customer balances', money(d.receivables), 'Outstanding credit'),
+      supplier_payables: () => kpiCard('Supplier payables', money(d.payables), 'Amount we owe'),
+      overdue_invoices: () => kpiCard('Overdue invoices', String(d.overdue_invoices || 0), `${d.debt_days || 7}+ days late`, (d.overdue_invoices || 0) > 0 ? 'danger' : ''),
+      unread_alerts: () => kpiCard('Unread alerts', String(d.notify_unread || 0), 'Needs attention', (d.notify_unread || 0) > 0 ? 'warn' : ''),
+      devices_in_stock: () => kpiCard('Devices in stock', String(imei.available || 0), 'Available at this branch'),
+      accessories_stock: () => kpiCard('Accessories on hand', String(qtyStock.qty || 0), `${qtyStock.sku_count || 0} SKU(s)`),
+      low_stock_items: () => kpiCard('Low stock items', String((d.low_stock || []).length), 'At or below threshold', (d.low_stock || []).length ? 'warn' : ''),
+      in_transit: () => kpiCard('In transit', String(d.in_transit || 0), 'Transfers on the way'),
+      open_repairs: () => kpiCard('Open repairs', String(d.open_repairs || 0), 'Active tickets'),
+      stuck_repairs: () => kpiCard('Stuck repairs', String(d.operations_snapshot?.stuck_repair_count || 0), `${d.repair_days || 3}+ days`, (d.operations_snapshot?.stuck_repair_count || 0) > 0 ? 'warn' : ''),
+      faulty_devices: () => kpiCard('Faulty devices', String(d.operations_snapshot?.faulty_device_count || 0), 'Awaiting resolution'),
+      repairs_today: () => kpiCard('Repairs completed today', String((d.today_repair_lines || []).length), 'Closed tickets'),
+      net_cash_today: () => kpiCard('Net cash today', money(d.today_cash_snapshot?.net || d.executive_snapshot?.cash_net_today || 0), 'In minus out'),
+      receivables: () => kpiCard('Receivables', money(d.receivables), `${d.executive_snapshot?.receivable_party_count || 0} customers`),
+      payables: () => kpiCard('Payables', money(d.payables), `${d.executive_snapshot?.payable_party_count || 0} suppliers`),
+      pending_approvals: () => kpiCard('Pending approvals', String(d.pending_approvals || 0), 'Waiting for review', (d.pending_approvals || 0) > 0 ? 'warn' : ''),
+      wholesale_today: () => kpiCard('Wholesale today', money(today.by_type?.wholesale?.net || 0), 'Wholesale channel'),
+    };
+    return builders[id] ? builders[id]() : '';
+  }
+
+  function dashboardPulseKpis(d, persona) {
+    const cards = homeKpiLayout(persona).map((id) => homeKpiCard(id, d)).filter(Boolean);
+    return `<div class="atoms-kpi-grid atoms-home-kpis">${cards.join('') || kpiCard('Sales today', money(d.today?.net || 0), 'Today')}</div>`;
+  }
+
+  function readHomeKpiSettingsFromDom() {
+    const out = {};
+    document.querySelectorAll('.atoms-home-kpi-sort:not([data-user-customize])').forEach((ul) => {
+      const personaId = ul.dataset.persona || '';
+      if (!personaId || personaId === 'me') return;
+      out[personaId] = [...ul.querySelectorAll('.atoms-home-kpi-sort-item')]
+        .map((li) => li.dataset.id)
+        .filter((id) => document.getElementById(`home-kpi-${personaId}-${id}`)?.checked);
+    });
+    return out;
+  }
+
+  function readUserHomeKpiFromDom() {
+    const ul = document.querySelector('.atoms-home-kpi-sort[data-user-customize="1"]');
+    if (!ul) return [];
+    return [...ul.querySelectorAll('.atoms-home-kpi-sort-item')]
+      .map((li) => li.dataset.id)
+      .filter((id) => document.getElementById(`home-kpi-me-${id}`)?.checked);
+  }
+
+  function dashboardUserCustomizeBar(persona) {
+    const user = homeUserPrefs();
+    const widgets = user.widgets?.length ? user.widgets : (homeDashboardManifest().widgets || []);
+    const layout = homeKpiLayout(persona);
+    const storeLayout = user.store_kpis || layout;
+    const personalBadge = user.has_override;
+    return `<div class="atoms-home-customize-bar">
+      <button type="button" class="atoms-btn ghost sm js-home-customize-toggle" aria-expanded="false" aria-controls="atoms-home-customize-panel">
+        <span class="material-symbols-outlined" aria-hidden="true">tune</span> Customize my overview
+      </button>
+      ${personalBadge ? '<span class="atoms-badge info">Personal layout</span>' : ''}
+      <div class="atoms-home-customize-panel hidden" id="atoms-home-customize-panel">
+        <p class="atoms-sub">Drag to reorder KPI cards for ${escapeHtml(homePersonaLabel(persona))}. Uncheck any you do not want. This overrides the store default for your account only.</p>
+        ${homeKpiSortListHtml('me', layout, widgets, { userCustomize: true, idPrefix: 'me' })}
+        <label class="atoms-home-kpi-check" style="margin-top:12px">
+          <input type="checkbox" id="home-user-show-trends" ${homeShowTrends() ? 'checked' : ''}> Show trends snapshot on overview
+        </label>
+        <div class="atoms-actions" style="margin-top:12px">
+          <button type="button" class="atoms-btn primary js-home-user-save">Save my layout</button>
+          <button type="button" class="atoms-btn ghost js-home-user-reset" ${personalBadge ? '' : 'disabled'}>Reset to store default</button>
+        </div>
+        ${user.has_kpi_override ? `<p class="atoms-muted atoms-home-customize-store">Store default: ${storeLayout.map((id) => widgets.find((w) => w.id === id)?.label || id).join(' · ')}</p>` : ''}
+      </div>
+    </div>`;
+  }
+
+  function homeKpiSettingsBlock(ops) {
+    const manifest = ops.home_dashboard || {};
+    const layout = manifest.layout || {};
+    const personas = manifest.personas || [];
+    const widgets = manifest.widgets || [];
+    if (!personas.length || !widgets.length) return '';
+    const blocks = personas.map((persona) => {
+      const picked = layout[persona.id] || [];
+      return `<div class="atoms-home-kpi-persona">
+        <h4>${escapeHtml(persona.label)}</h4>
+        ${homeKpiSortListHtml(persona.id, picked, widgets)}
+      </div>`;
+    }).join('');
+    return `<div class="atoms-card" style="margin-bottom:16px">
+      <div class="atoms-pos-section-title">
+        <span class="material-symbols-outlined" style="color:var(--atoms-primary);">dashboard</span>
+        <span>Home overview layout</span>
+      </div>
+      <p class="atoms-sub">Drag widgets to reorder. Checked KPIs appear on the store overview for each desk type. Staff can still personalize their own view from the overview page.</p>
+      <form class="atoms-form" id="home-layout-form">
+        ${field('Trends snapshot on home', `<label><input type="checkbox" id="home-show-trends" ${ops.home_show_trends !== false ? 'checked' : ''}> Show the mini sales chart on the overview (users with report access)</label>`)}
+        <div class="atoms-home-kpi-grid">${blocks}</div>
+        <div class="atoms-actions">
+          <button class="atoms-btn primary" type="submit">Save home layout</button>
+        </div>
+      </form>
+    </div>`;
+  }
+
+  function dashboardSalesQueue(d) {
+    const rows = dashTake(d.today_sales_lines);
+    if (!rows.length) {
+      return dashQueueEmpty('No sales posted today yet.', '#/pos', 'Start a sale');
+    }
+    return `<table class="atoms-table"><thead><tr><th>Invoice</th><th>Customer</th><th>Devices</th><th>Total</th><th>Paid</th></tr></thead><tbody>
+      ${rows.map((l) => `<tr>
+        <td>${l.invoice_number ? `<button type="button" class="atoms-link js-invoice" data-inv="${escapeHtml(l.invoice_number)}">${escapeHtml(l.invoice_number)}</button>` : '—'}</td>
+        <td>${l.customer_id ? `<button type="button" class="atoms-link js-aging-cust" data-id="${l.customer_id}">${escapeHtml(l.customer_name || '')}</button>` : escapeHtml(l.customer_name || 'Walk-in')}</td>
+        <td>${escapeHtml(l.device_summary || '—')}</td>
+        <td>${money(l.total)}</td>
+        <td>${money(l.paid_amount)}</td>
+      </tr>`).join('')}
+    </tbody></table>
+    <p class="atoms-home-queue-foot"><a href="#/pos">New sale</a>${(d.today_sales_lines || []).length > 5 ? ` · <a href="#/analytics">All sales in trends</a>` : ''}</p>`;
+  }
+
+  function dashboardMoneyQueue(d) {
+    const payments = dashTake(d.today_payment_lines);
+    const overdue = dashTake(d.overdue_lines);
+    if (!payments.length && !overdue.length) {
+      return dashQueueEmpty('No collections or overdue invoices right now.', '#/customers', 'Open customers');
+    }
+    let html = '';
+    if (payments.length) {
+      html += `<h4 class="atoms-home-queue-sub">Payments today</h4>
+        <table class="atoms-table"><thead><tr><th>Customer</th><th>Invoice</th><th>Amount</th><th>Method</th></tr></thead><tbody>
+          ${payments.map((l) => `<tr>
+            <td><button type="button" class="atoms-link js-aging-cust" data-id="${l.customer_id}">${escapeHtml(l.customer_name || '')}</button></td>
+            <td>${l.invoice_number ? `<button type="button" class="atoms-link js-invoice" data-inv="${escapeHtml(l.invoice_number)}">${escapeHtml(l.invoice_number)}</button>` : '—'}</td>
+            <td>${money(l.amount)}</td>
+            <td>${escapeHtml(l.method || '')}</td>
+          </tr>`).join('')}
+        </tbody></table>`;
+    }
+    if (overdue.length) {
+      html += `<h4 class="atoms-home-queue-sub">Overdue (${d.debt_days || 7}+ days)</h4>
+        <table class="atoms-table"><thead><tr><th>Customer</th><th>Invoice</th><th>Due</th><th>Age</th></tr></thead><tbody>
+          ${overdue.map((l) => `<tr>
+            <td><button type="button" class="atoms-link js-dash-overdue" data-id="${l.id}">${escapeHtml(l.name || '')}</button></td>
+            <td>${escapeHtml(l.invoice_number || '')}</td>
+            <td>${money(l.amount)}</td>
+            <td>${l.days}d</td>
+          </tr>`).join('')}
+        </tbody></table>`;
+    }
+    html += `<p class="atoms-home-queue-foot"><a href="#/customers">Customer accounts</a> · <a href="#/analytics">Receivables desk</a></p>`;
+    return html;
+  }
+
+  function dashboardStockQueue(d) {
+    const low = dashTake(d.low_stock);
+    const transit = dashTake(d.transit_lines);
+    const transfers = dashTake(d.today_transfer_lines);
+    if (!low.length && !transit.length && !transfers.length) {
+      return dashQueueEmpty('Stock looks healthy — no low items or transfers waiting.', '#/inventory', 'View stock');
+    }
+    let html = '';
+    if (low.length) {
+      html += `<h4 class="atoms-home-queue-sub">Low stock</h4>
+        <table class="atoms-table"><thead><tr><th>Product</th><th>Available</th><th>Threshold</th></tr></thead><tbody>
+          ${low.map((a) => `<tr>
+            <td><a class="atoms-link" href="#/inventory?filter=low&product=${Number(a.product_id || 0)}">${escapeHtml(a.name)}</a>${a.variant_label ? `<br><span class="atoms-muted">${escapeHtml(a.variant_label)}</span>` : ''}</td>
+            <td><strong>${a.qty}</strong></td>
+            <td>${a.low_stock_threshold}</td>
+          </tr>`).join('')}
+        </tbody></table>`;
+    }
+    if (transit.length) {
+      html += `<h4 class="atoms-home-queue-sub">In transit</h4>
+        <table class="atoms-table"><thead><tr><th>Transfer</th><th>Route</th><th>Devices</th></tr></thead><tbody>
+          ${transit.map((l) => `<tr>
+            <td><button type="button" class="atoms-link js-dash-transit" data-id="${l.id}">${escapeHtml('#' + l.id)}</button></td>
+            <td>${escapeHtml(l.from_branch_name || '')} → ${escapeHtml(l.to_branch_name || '')}</td>
+            <td>${escapeHtml(l.device_summary || '—')}</td>
+          </tr>`).join('')}
+        </tbody></table>`;
+    }
+    if (transfers.length) {
+      html += `<h4 class="atoms-home-queue-sub">Transfers today</h4>
+        <table class="atoms-table"><thead><tr><th>Transfer</th><th>Route</th><th>Status</th></tr></thead><tbody>
+          ${transfers.map((l) => `<tr>
+            <td><button type="button" class="atoms-link js-dash-transit" data-id="${l.id}">${escapeHtml('#' + l.id)}</button></td>
+            <td>${escapeHtml(l.from_branch_name || '')} → ${escapeHtml(l.to_branch_name || '')}</td>
+            <td>${badge(l.status)}</td>
+          </tr>`).join('')}
+        </tbody></table>`;
+    }
+    html += `<p class="atoms-home-queue-foot"><a href="#/inventory">Products & stock</a> · <a href="#/transfers">Transfers</a></p>`;
+    return html;
+  }
+
+  function dashboardOpsQueue(d) {
+    const approvals = dashTake(d.approval_lines);
+    const repairs = dashTake(d.repair_lines);
+    const alerts = dashTake(d.notify_lines);
+    const expenses = dashTake(d.expense_lines);
+    if (!approvals.length && !repairs.length && !alerts.length && !expenses.length) {
+      return dashQueueEmpty('No approvals, repairs, or alerts need you right now.', '#/notifications', 'View alerts');
+    }
+    let html = '';
+    if (approvals.length && (can('atoms_approve') || can('atoms_approve_adjustments'))) {
+      html += `<h4 class="atoms-home-queue-sub">Pending approvals</h4>
+        <table class="atoms-table"><thead><tr><th>#</th><th>Request</th><th>Summary</th><th></th></tr></thead><tbody>
+          ${approvals.map((a) => `<tr>
+            <td><button type="button" class="atoms-link js-dash-approval" data-id="${a.id}">${a.id}</button></td>
+            <td>${escapeHtml(a.type_label || a.type)}</td>
+            <td>${escapeHtml(a.summary || '')}</td>
+            <td><a class="atoms-btn ghost xs" href="#/approvals">Review</a></td>
+          </tr>`).join('')}
+        </tbody></table>`;
+    }
+    if (repairs.length) {
+      html += `<h4 class="atoms-home-queue-sub">Open repairs</h4>
+        <table class="atoms-table"><thead><tr><th>Ticket</th><th>Customer</th><th>Status</th><th>Age</th></tr></thead><tbody>
+          ${repairs.map((l) => `<tr>
+            <td><button type="button" class="atoms-link js-dash-repair" data-id="${l.id}">${escapeHtml(l.ticket_number || '')}</button></td>
+            <td>${escapeHtml(l.customer_name || 'Walk-in')}</td>
+            <td>${badge(l.status)}</td>
+            <td>${l.days}d</td>
+          </tr>`).join('')}
+        </tbody></table>`;
+    }
+    if (expenses.length) {
+      html += `<h4 class="atoms-home-queue-sub">Pending expenses</h4>
+        <table class="atoms-table"><thead><tr><th>Expense</th><th>Vendor</th><th>Amount</th></tr></thead><tbody>
+          ${expenses.map((l) => `<tr>
+            <td><button type="button" class="atoms-link js-exp-open" data-id="${l.id}">${escapeHtml('#' + l.id)}</button></td>
+            <td>${escapeHtml(l.vendor || '—')}</td>
+            <td>${money(l.amount)}</td>
+          </tr>`).join('')}
+        </tbody></table>`;
+    }
+    if (alerts.length) {
+      html += `<h4 class="atoms-home-queue-sub">Recent alerts</h4>
+        <table class="atoms-table"><thead><tr><th>Alert</th><th>When</th><th></th></tr></thead><tbody>
+          ${alerts.map((n) => `<tr class="${Number(n.is_read) ? '' : 'is-unread'}">
+            <td>${escapeHtml(n.title || '')}<br><span class="atoms-muted">${escapeHtml(n.body || '')}</span></td>
+            <td>${escapeHtml(n.created_at || '')}</td>
+            <td>${n.link ? `<button type="button" class="atoms-link js-notify-open" data-link="${escapeHtml(JSON.stringify(n.link))}">Open</button>` : ''}</td>
+          </tr>`).join('')}
+        </tbody></table>`;
+    }
+    html += `<p class="atoms-home-queue-foot"><a href="#/approvals">Approvals</a> · <a href="#/repairs">Repairs</a> · <a href="#/notifications">All alerts</a></p>`;
+    return html;
+  }
+
+  function dashboardWorkQueuesPanel(d) {
+    const salesCount = (d.today_sales_lines || []).length;
+    const moneyCount = (d.today_payment_lines || []).length + (d.overdue_lines || []).length;
+    const stockCount = (d.low_stock || []).length + (d.transit_lines || []).length;
+    const opsCount = (d.approval_lines || []).length + (d.repair_lines || []).length + (d.notify_lines || []).filter((n) => !Number(n.is_read)).length;
+    const activeQueue = homeQueueTabPref();
+    const tabBtn = (id, label, count) => `<button type="button" class="atoms-seg-tab js-home-queue-tab${activeQueue === id ? ' is-active' : ''}" data-queue="${id}" role="tab" aria-selected="${activeQueue === id ? 'true' : 'false'}">${label}${count ? ` (${count})` : ''}</button>`;
+    return `<div class="atoms-panel atoms-home-queues">
+      <div class="atoms-panel-head">
+        <div class="atoms-panel-title-wrap">
+          <span class="material-symbols-outlined atoms-panel-icon" aria-hidden="true">list_alt</span>
+          <div>
+            <h2 class="atoms-panel-title">Work queues</h2>
+            <p class="atoms-panel-sub">Today’s sales, money, stock, and operations — top items only.</p>
+          </div>
+        </div>
+        <div class="atoms-seg-tabs atoms-home-queue-tabs" role="tablist" aria-label="Work queue views">
+          ${tabBtn('sales', 'Sales', salesCount)}
+          ${tabBtn('money', 'Money', moneyCount)}
+          ${tabBtn('stock', 'Stock', stockCount)}
+          ${tabBtn('ops', 'Ops', opsCount)}
+        </div>
+      </div>
+      <div class="atoms-panel-body atoms-home-queue-body">
+        <div class="atoms-home-queue-pane${activeQueue === 'sales' ? '' : ' hidden'}" data-queue-pane="sales">${dashboardSalesQueue(d)}</div>
+        <div class="atoms-home-queue-pane${activeQueue === 'money' ? '' : ' hidden'}" data-queue-pane="money">${dashboardMoneyQueue(d)}</div>
+        <div class="atoms-home-queue-pane${activeQueue === 'stock' ? '' : ' hidden'}" data-queue-pane="stock">${dashboardStockQueue(d)}</div>
+        <div class="atoms-home-queue-pane${activeQueue === 'ops' ? '' : ' hidden'}" data-queue-pane="ops">${dashboardOpsQueue(d)}</div>
+      </div>
+    </div>`;
+  }
+
+  function dashboardInsightsTeaser(d) {
+    if (!can('atoms_view_reports') || !homeShowTrends()) return '';
+    const hasTrend = (d.trend_lines || []).some((t) => t.invoices || t.net || t.collected);
+    const cash = d.today_cash_snapshot;
+    return `<div class="atoms-panel atoms-home-insights">
+      <div class="atoms-panel-head">
+        <div class="atoms-panel-title-wrap">
+          <span class="material-symbols-outlined atoms-panel-icon" aria-hidden="true">monitoring</span>
+          <div>
+            <h2 class="atoms-panel-title">Trends snapshot</h2>
+            <p class="atoms-panel-sub">14-day performance — open Trends & charts for the full business desk.</p>
+          </div>
+        </div>
+        <a class="atoms-btn ghost sm" href="#/analytics"><span class="material-symbols-outlined">open_in_new</span> Open trends</a>
+      </div>
+      <div class="atoms-panel-body">
+        ${cash ? `<div class="atoms-home-cash-strip">
+          <div><span class="atoms-muted">Cash in</span><strong>${money(cash.inflows || 0)}</strong></div>
+          <div><span class="atoms-muted">Outflows</span><strong>${money(cash.outflows || 0)}</strong></div>
+          <div><span class="atoms-muted">Net today</span><strong>${money(cash.net || 0)}</strong></div>
+        </div>` : ''}
+        ${hasTrend ? `<div class="atoms-home-chart">${barChart(d.trend_lines, 'net', 'date', 'Sales (14 days)')}</div>` : '<p class="atoms-muted">No sales trend data for this window yet.</p>'}
+        <p class="atoms-home-queue-foot"><a href="#/analytics">Business insights & snapshots</a> · <a href="#/reports">Download reports</a></p>
+      </div>
+    </div>`;
+  }
+
   async function screenDashboard() {
     const queued = readQueue();
     let d = null;
@@ -871,7 +1317,7 @@
         inventory: { products: [] },
       };
     }
-    const imei = (d.imei && !Array.isArray(d.imei)) ? d.imei : {};
+    const persona = homePersona();
     const branchName = (state.bootstrap.branches || []).find((b) => Number(b.id) === Number(state.branchId))?.name || 'Your store';
     const attention = [];
     if ((d.overdue_invoices || 0) > 0) {
@@ -889,13 +1335,11 @@
     if ((d.inbound_reserved || 0) > 0) {
       attention.push(attentionPill('local_shipping', `${d.inbound_reserved} inbound reserved`, '#/inbound', 'info'));
     }
-    const qtyStock = d.quantity_stock || {};
     const quickActions = [
       can('atoms_create_sale') ? quickAction('#/pos', 'point_of_sale', 'New sale', 'Devices & accessories') : '',
       can('atoms_create_payment') ? quickAction('#/customers', 'payments', 'Collect payment', 'Record customer payment') : '',
       can('atoms_view_imei') ? quickAction('#/imei', 'smartphone', 'Find device', 'Search by IMEI or invoice') : '',
       canReceivePurchases() ? quickAction('#/purchases', 'local_shipping', 'Receive stock', 'Log supplier delivery') : (canInbound() ? quickAction('#/inbound', 'move_to_inbox', 'Inbound manifest', 'Pre-register expected goods') : ''),
-      can('atoms_view_reports') ? quickAction('#/reports', 'summarize', 'View reports', 'Download sales & stock CSV') : '',
       can('atoms_view_reports') ? quickAction('#/analytics', 'monitoring', 'See trends', 'Charts and performance') : '',
     ].filter(Boolean).join('');
     return `
@@ -903,1479 +1347,19 @@
         group: 'Your store',
         trail: 'Overview',
         title: `Good ${greeting()}, ${escapeHtml(branchName)}`,
-        subtitle: "Today's sales, cash, stock levels, and items that need your attention — all in one place.",
+        subtitle: `${homePersonaLabel(persona)} — what needs attention today, then your top work queues.`,
         actions: `${can('atoms_create_sale') ? '<a class="atoms-btn primary" href="#/pos"><span class="material-symbols-outlined">point_of_sale</span> New sale</a>' : ''}${can('atoms_create_payment') ? '<a class="atoms-btn accent" href="#/customers"><span class="material-symbols-outlined">payments</span> Collect payment</a>' : ''}`,
       })}
       ${dashWarn}
       ${queueCard(queued)}
       ${attention.length ? `<div class="atoms-attention-bar">${attention.join('')}</div>` : ''}
-      <div class="atoms-kpi-section">
-        <div class="atoms-kpi-grid atoms-kpi-grid--money">
-          ${kpiCard('Sales today', money(d.today.net), `Retail ${money(d.today.by_type?.retail?.net || 0)}`)}
-          ${kpiCard('Cash collected', money(d.today.collected), 'Money received today')}
-          ${kpiCard('Customer balances', money(d.receivables), 'Outstanding credit')}
-          ${kpiCard('Supplier payables', money(d.payables), 'Amount we owe')}
-        </div>
-        <div class="atoms-kpi-grid atoms-kpi-grid--ops">
-          ${kpiCard('Devices in stock', String(imei.available || 0), 'Available at this branch')}
-          ${kpiCard('Accessories on hand', String(qtyStock.qty || 0), `${qtyStock.sku_count || 0} SKU(s) · ${money(qtyStock.value || 0)}`)}
-          ${kpiCard('Inbound reserved', String(d.inbound_reserved || 0), 'Pre-registered, awaiting receipt')}
-          ${kpiCard('Open repairs', String(d.open_repairs || 0), `${d.in_transit || 0} in transit`)}
-        </div>
-      </div>
-      ${quickActions ? `<div class="atoms-quick-actions">${quickActions}</div>` : ''}
-      <div class="atoms-dashboard-body">
-      ${sectionPanel('Today at a glance', `
-        <div class="atoms-kpi-grid">
-          ${kpiCard('Pending approvals', String(d.pending_approvals || 0), 'Price and expense requests')}
-          ${kpiCard('Overdue invoices', String(d.overdue_invoices || 0), `${d.debt_days || 7}+ days late`, 'danger')}
-          ${kpiCard('Unread alerts', String(d.notify_unread || 0), 'System notifications')}
-          ${kpiCard('Wholesale today', money(d.today.by_type?.wholesale?.net || 0), 'Wholesale channel sales')}
-        </div>`, { icon: 'today', subtitle: 'Key counts for the current business day' })}
-      ${d.today_cash_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Cash today</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Cash in</h3><div class="atoms-metric">${money(d.today_cash_snapshot.inflows || 0)}</div></div>
-          <div class="atoms-card"><h3>Outflows</h3><div class="atoms-metric">${money(d.today_cash_snapshot.outflows || 0)}</div></div>
-          <div class="atoms-card"><h3>Net</h3><div class="atoms-metric">${money(d.today_cash_snapshot.net || 0)}</div></div>
-        </div>
-      </div>` : ''}
-      ${(d.today_sales_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Sales today</h3>
-        <table class="atoms-table"><thead><tr><th>Invoice</th><th>Customer</th><th>Devices</th><th>Total</th><th>Paid</th></tr></thead><tbody>
-          ${d.today_sales_lines.map((l) => `<tr>
-            <td>${l.invoice_number ? `<button type="button" class="atoms-link js-invoice" data-inv="${escapeHtml(l.invoice_number)}">${escapeHtml(l.invoice_number)}</button>` : '—'}</td>
-            <td>${l.customer_id ? `<button type="button" class="atoms-link js-aging-cust" data-id="${l.customer_id}">${escapeHtml(l.customer_name || '')}</button>` : escapeHtml(l.customer_name || 'Walk-in')}</td>
-            <td>${escapeHtml(l.device_summary || '—')}</td>
-            <td>${money(l.total)}</td>
-            <td>${money(l.paid_amount)}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.today_payment_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Payments today</h3>
-        <table class="atoms-table"><thead><tr><th>Customer</th><th>Invoice</th><th>Amount</th><th>Method</th></tr></thead><tbody>
-          ${d.today_payment_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-aging-cust" data-id="${l.customer_id}">${escapeHtml(l.customer_name || '')}</button></td>
-            <td>${l.invoice_number ? `<button type="button" class="atoms-link js-invoice" data-inv="${escapeHtml(l.invoice_number)}">${escapeHtml(l.invoice_number)}</button>` : '—'}</td>
-            <td>${money(l.amount)}</td>
-            <td>${escapeHtml(l.method || '')}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.today_return_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Returns today</h3>
-        <table class="atoms-table"><thead><tr><th>Invoice</th><th>Customer</th><th>Device</th><th>Refund</th></tr></thead><tbody>
-          ${d.today_return_lines.map((l) => `<tr>
-            <td>${escapeHtml(l.invoice_number || '')}</td>
-            <td>${escapeHtml(l.customer_name || 'Walk-in')}</td>
-            <td>${escapeHtml(l.device_summary || '—')}</td>
-            <td>${money(l.refund_amount)}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${d.intake_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Stock received today</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Purchases</h3><div class="atoms-metric">${d.intake_snapshot.purchase_count || 0}<div class="atoms-muted">${money(d.intake_snapshot.purchase_total || 0)}</div></div></div>
-          <div class="atoms-card"><h3>IMEIs registered</h3><div class="atoms-metric">${d.intake_snapshot.imei_count || 0}</div></div>
-          <div class="atoms-card"><h3>Inbound reserved</h3><div class="atoms-metric">${d.intake_snapshot.inbound_reserved_count || 0}<div class="atoms-muted">manifest units awaiting receipt</div></div></div>
-          <div class="atoms-card"><h3>Supplier payments</h3><div class="atoms-metric">${d.intake_snapshot.supplier_payment_count || 0}<div class="atoms-muted">${money(d.intake_snapshot.supplier_payment_total || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Swaps</h3><div class="atoms-metric">${d.intake_snapshot.swap_count || 0}<div class="atoms-muted">${money(d.intake_snapshot.swap_collected || 0)}</div></div></div>
-        </div>
-      </div>` : ''}
-      ${(d.today_purchase_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Purchases today</h3>
-        <table class="atoms-table"><thead><tr><th>Supplier</th><th>PO invoice</th><th>Items</th><th>Total</th></tr></thead><tbody>
-          ${d.today_purchase_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-dash-payable" data-id="${l.supplier_id}">${escapeHtml(l.supplier_name || '')}</button></td>
-            <td><button type="button" class="atoms-link js-dash-purchase" data-id="${l.id}">${escapeHtml(l.invoice_number || '')}</button></td>
-            <td>${escapeHtml(l.item_summary || '—')}</td>
-            <td>${money(l.total)}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.today_imei_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>IMEIs registered today</h3>
-        <table class="atoms-table"><thead><tr><th>IMEI</th><th>Device</th><th>Status</th><th>Source</th></tr></thead><tbody>
-          ${d.today_imei_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-open-imei" data-imei="${escapeHtml(l.imei || '')}">${escapeHtml(l.imei || '')}</button></td>
-            <td>${escapeHtml(l.device_summary || '—')}</td>
-            <td>${badge(l.status)}</td>
-            <td>${escapeHtml(l.source_type || '')}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.today_supplier_payment_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Supplier payments today</h3>
-        <table class="atoms-table"><thead><tr><th>Supplier</th><th>PO invoice</th><th>Amount</th><th>Method</th></tr></thead><tbody>
-          ${d.today_supplier_payment_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-dash-payable" data-id="${l.supplier_id}">${escapeHtml(l.supplier_name || '')}</button></td>
-            <td>${l.purchase_id ? `<button type="button" class="atoms-link js-dash-purchase" data-id="${l.purchase_id}">${escapeHtml(l.purchase_invoice || '')}</button>` : escapeHtml(l.purchase_invoice || '—')}</td>
-            <td>${money(l.amount)}</td>
-            <td>${escapeHtml(l.method || '')}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.today_swap_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Swaps today</h3>
-        <table class="atoms-table"><thead><tr><th>Swap</th><th>Customer</th><th>Devices</th><th>Collected</th></tr></thead><tbody>
-          ${d.today_swap_lines.map((l) => `<tr>
-            <td>${escapeHtml(l.invoice_number || ('#' + l.id))}</td>
-            <td>${escapeHtml(l.customer_name || 'Walk-in')}</td>
-            <td>${escapeHtml(l.device_summary || '—')}</td>
-            <td>${money(l.paid_amount)}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${d.operations_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Operations queue</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Open repairs</h3><div class="atoms-metric">${d.operations_snapshot.open_repair_count || 0}</div></div>
-          <div class="atoms-card"><h3>Pending approvals</h3><div class="atoms-metric">${d.operations_snapshot.pending_approval_count || 0}</div></div>
-          <div class="atoms-card"><h3>In transit</h3><div class="atoms-metric">${d.operations_snapshot.in_transit_count || 0}</div></div>
-          <div class="atoms-card"><h3>Open stock counts</h3><div class="atoms-metric">${d.operations_snapshot.open_stock_count_count || 0}</div></div>
-          <div class="atoms-card"><h3>Faulty devices</h3><div class="atoms-metric">${d.operations_snapshot.faulty_device_count || 0}</div></div>
-          <div class="atoms-card"><h3>Pending expenses</h3><div class="atoms-metric">${d.operations_snapshot.pending_expense_count || 0}<div class="atoms-muted">${money(d.operations_snapshot.pending_expense_total || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Open purchases</h3><div class="atoms-metric">${d.operations_snapshot.open_purchase_count || 0}<div class="atoms-muted">${money(d.operations_snapshot.open_purchase_total || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Inbound reserved</h3><div class="atoms-metric">${d.operations_snapshot.inbound_reserved_count || 0}</div></div>
-          <div class="atoms-card"><h3>Accessory stock</h3><div class="atoms-metric">${d.operations_snapshot.quantity_stock_qty || 0}<div class="atoms-muted">${d.operations_snapshot.quantity_sku_count || 0} SKUs</div></div></div>
-          <div class="atoms-card"><h3>Stuck repairs</h3><div class="atoms-metric">${d.operations_snapshot.stuck_repair_count || 0}</div></div>
-          <div class="atoms-card"><h3>Stuck transfers</h3><div class="atoms-metric">${d.operations_snapshot.stuck_transfer_count || 0}</div></div>
-          <div class="atoms-card"><h3>Stuck faulty</h3><div class="atoms-metric">${d.operations_snapshot.stuck_faulty_count || 0}</div></div>
-        </div>
-      </div>` : ''}
-      ${(d.today_transfer_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Transfers today</h3>
-        <table class="atoms-table"><thead><tr><th>Transfer</th><th>Route</th><th>Status</th><th>Devices</th></tr></thead><tbody>
-          ${d.today_transfer_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-dash-transit" data-id="${l.id}">${escapeHtml('#' + l.id)}</button></td>
-            <td>${escapeHtml(l.from_branch_name || '')} → ${escapeHtml(l.to_branch_name || '')}</td>
-            <td>${badge(l.status)}</td>
-            <td>${escapeHtml(l.device_summary || '—')}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.today_repair_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Repairs completed today</h3>
-        <table class="atoms-table"><thead><tr><th>Ticket</th><th>Customer</th><th>Device</th><th>Engineer</th><th>Outcome</th></tr></thead><tbody>
-          ${d.today_repair_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-dash-repair" data-id="${l.id}">${escapeHtml(l.ticket_number || '')}</button></td>
-            <td>${escapeHtml(l.customer_name || 'Walk-in')}</td>
-            <td>${escapeHtml(l.device_summary || '—')}</td>
-            <td>${escapeHtml(l.engineer_name || '—')}</td>
-            <td>${badge(l.status)}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.today_audit_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Audit activity today</h3>
-        <table class="atoms-table"><thead><tr><th>When</th><th>Action</th><th>User</th><th>Summary</th></tr></thead><tbody>
-          ${d.today_audit_lines.map((a) => `<tr>
-            <td>${escapeHtml(a.created_at || '')}</td>
-            <td>${escapeHtml(a.action_label || a.action || '')}</td>
-            <td>${escapeHtml(a.user_name || '')}</td>
-            <td>${escapeHtml(a.summary || '')}${a.link ? ` <button type="button" class="atoms-link js-audit-open" data-link="${escapeHtml(JSON.stringify(a.link))}">Open</button>` : ''}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${d.receivables_snapshot ? `<div class="atoms-insights-hub"><div class="atoms-insights-hub-head"><div><h2>Business insights</h2><p>Sales, cash, inventory, and account balances — mostly last 14 days.</p></div><a class="atoms-btn ghost sm" href="#/analytics"><span class="material-symbols-outlined">monitoring</span> Open trends</a></div><div class="atoms-insights-grid">` : ''}
-      ${d.receivables_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Customer payments & credit</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Overdue invoices</h3><div class="atoms-metric">${d.receivables_snapshot.overdue_count || 0}<div class="atoms-muted">${money(d.receivables_snapshot.overdue_total || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Retail owing</h3><div class="atoms-metric">${d.receivables_snapshot.retail_count || 0}<div class="atoms-muted">${money(d.receivables_snapshot.retail_total || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Wholesale owing</h3><div class="atoms-metric">${d.receivables_snapshot.wholesale_count || 0}<div class="atoms-muted">${money(d.receivables_snapshot.wholesale_total || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Open invoices</h3><div class="atoms-metric">${d.receivables_snapshot.open_invoice_count || 0}<div class="atoms-muted">${money(d.receivables_snapshot.open_invoice_total || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Collections today</h3><div class="atoms-metric">${d.receivables_snapshot.collection_count || 0}<div class="atoms-muted">${money(d.receivables_snapshot.collection_total || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Unread alerts</h3><div class="atoms-metric">${d.receivables_snapshot.notify_unread || 0}</div></div>
-        </div>
-      </div>` : ''}
-      ${(d.today_approval_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Approvals reviewed today</h3>
-        <table class="atoms-table"><thead><tr><th>Request</th><th>Type</th><th>Summary</th><th>Decision</th><th>Reviewer</th></tr></thead><tbody>
-          ${d.today_approval_lines.map((a) => `<tr>
-            <td><button type="button" class="atoms-link js-dash-approval" data-id="${a.id}">${a.id}</button></td>
-            <td>${escapeHtml(a.type_label || a.type || '')}</td>
-            <td>${escapeHtml(a.summary || '—')}</td>
-            <td>${badge(a.status)}</td>
-            <td>${escapeHtml(a.reviewer_name || '—')}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.today_customer_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>New customers today</h3>
-        <table class="atoms-table"><thead><tr><th>Customer</th><th>Phone</th><th>Balance</th></tr></thead><tbody>
-          ${d.today_customer_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-dash-overdue" data-id="${l.id}">${escapeHtml(l.name || '')}</button></td>
-            <td>${escapeHtml(l.phone || '')}</td>
-            <td>${money(l.balance)}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${d.payables_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Supplier balances</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Open payables</h3><div class="atoms-metric">${d.payables_snapshot.open_payable_count || 0}<div class="atoms-muted">${money(d.payables_snapshot.open_payable_total || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Aged payables</h3><div class="atoms-metric">${d.payables_snapshot.aged_payable_count || 0}<div class="atoms-muted">${money(d.payables_snapshot.aged_payable_total || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Open POs</h3><div class="atoms-metric">${d.payables_snapshot.open_purchase_count || 0}<div class="atoms-muted">${money(d.payables_snapshot.open_purchase_total || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Supplier payments today</h3><div class="atoms-metric">${d.payables_snapshot.supplier_payment_count || 0}<div class="atoms-muted">${money(d.payables_snapshot.supplier_payment_total || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Supplier returns today</h3><div class="atoms-metric">${d.payables_snapshot.supplier_return_count || 0}<div class="atoms-muted">${money(d.payables_snapshot.supplier_return_total || 0)}</div></div></div>
-        </div>
-      </div>` : ''}
-      ${(d.today_supplier_return_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Supplier returns today</h3>
-        <table class="atoms-table"><thead><tr><th>Supplier</th><th>IMEI</th><th>Device</th><th>Credit</th></tr></thead><tbody>
-          ${d.today_supplier_return_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-dash-payable" data-id="${l.supplier_id}">${escapeHtml(l.supplier_name || '')}</button></td>
-            <td><button type="button" class="atoms-link js-open-imei" data-imei="${escapeHtml(l.imei || '')}">${escapeHtml(l.imei || '')}</button></td>
-            <td>${escapeHtml(l.device_summary || '—')}</td>
-            <td>${money(l.amount)}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.today_stock_count_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Stock counts posted today</h3>
-        <table class="atoms-table"><thead><tr><th>Count</th><th>Branch</th><th>Expected</th><th>Missing</th><th>Extra</th></tr></thead><tbody>
-          ${d.today_stock_count_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-dash-count" data-id="${l.id}">${escapeHtml('#' + l.id)}</button></td>
-            <td>${escapeHtml(l.branch_name || '')}</td>
-            <td>${l.expected_qty || 0}</td>
-            <td>${l.missing_qty || 0}</td>
-            <td>${l.extra_qty || 0}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.today_expense_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Expenses posted today</h3>
-        <table class="atoms-table"><thead><tr><th>Expense</th><th>Category</th><th>Vendor</th><th>Amount</th></tr></thead><tbody>
-          ${d.today_expense_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-exp-open" data-id="${l.id}">${escapeHtml('#' + l.id)}</button></td>
-            <td>${badge(l.category)}</td>
-            <td>${escapeHtml(l.vendor || '—')}</td>
-            <td>${money(l.amount)}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${d.adjustments_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Returns & adjustments</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Returns today</h3><div class="atoms-metric">${d.adjustments_snapshot.return_count || 0}<div class="atoms-muted">${money(d.adjustments_snapshot.return_total || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Payment reversals today</h3><div class="atoms-metric">${d.adjustments_snapshot.reversal_count || 0}<div class="atoms-muted">${money(d.adjustments_snapshot.reversal_total || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Voided sales today</h3><div class="atoms-metric">${d.adjustments_snapshot.voided_count || 0}<div class="atoms-muted">${money(d.adjustments_snapshot.voided_total || 0)}</div></div></div>
-        </div>
-      </div>` : ''}
-      ${(d.today_reversal_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Payment reversals today</h3>
-        <table class="atoms-table"><thead><tr><th>Customer</th><th>Invoice</th><th>Amount</th><th>Reason</th></tr></thead><tbody>
-          ${d.today_reversal_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-dash-overdue" data-id="${l.customer_id}">${escapeHtml(l.customer_name || '')}</button></td>
-            <td>${l.invoice_number ? `<button type="button" class="atoms-link js-invoice" data-inv="${escapeHtml(l.invoice_number)}">${escapeHtml(l.invoice_number)}</button>` : '—'}</td>
-            <td>${money(l.amount)}</td>
-            <td>${escapeHtml(l.notes || '—')}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.today_voided_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Voided sales today</h3>
-        <table class="atoms-table"><thead><tr><th>Invoice</th><th>Customer</th><th>Devices</th><th>Total</th><th>Reason</th></tr></thead><tbody>
-          ${d.today_voided_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-invoice" data-inv="${escapeHtml(l.invoice_number || '')}">${escapeHtml(l.invoice_number || '')}</button></td>
-            <td>${l.customer_id ? `<button type="button" class="atoms-link js-dash-overdue" data-id="${l.customer_id}">${escapeHtml(l.customer_name || '')}</button>` : escapeHtml(l.customer_name || 'Walk-in')}</td>
-            <td>${escapeHtml(l.device_summary || '—')}</td>
-            <td>${money(l.total)}</td>
-            <td>${escapeHtml(l.void_reason || '—')}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${d.performance_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Alerts & inventory performance</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Low stock</h3><div class="atoms-metric">${d.performance_snapshot.low_stock_count || 0}</div></div>
-          <div class="atoms-card"><h3>Slow movers</h3><div class="atoms-metric">${d.performance_snapshot.slow_mover_count || 0}</div></div>
-          <div class="atoms-card"><h3>Top sellers (14d)</h3><div class="atoms-metric">${d.performance_snapshot.top_seller_count || 0}<div class="atoms-muted">${d.performance_snapshot.top_seller_units || 0} units · ${money(d.performance_snapshot.top_seller_revenue || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Unread alerts</h3><div class="atoms-metric">${d.performance_snapshot.notify_unread || 0}</div></div>
-          <div class="atoms-card"><h3>Alerts today</h3><div class="atoms-metric">${d.performance_snapshot.alert_today_count || 0}</div></div>
-        </div>
-      </div>` : ''}
-      ${(d.today_notify_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Alerts today</h3>
-        <table class="atoms-table"><thead><tr><th>Alert</th><th>Detail</th><th>When</th><th></th></tr></thead><tbody>
-          ${d.today_notify_lines.map((n) => `<tr class="${Number(n.is_read) ? '' : 'is-unread'}">
-            <td>${escapeHtml(n.title || '')}</td>
-            <td>${escapeHtml(n.body || '')}</td>
-            <td>${escapeHtml(n.created_at || '')}</td>
-            <td>${n.link ? `<button type="button" class="atoms-link js-notify-open" data-link="${escapeHtml(JSON.stringify(n.link))}">Open</button>` : ''}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${d.staff_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Staff & branch performance</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Staff selling (14d)</h3><div class="atoms-metric">${d.staff_snapshot.staff_count || 0}<div class="atoms-muted">${d.staff_snapshot.staff_invoices || 0} invoices</div></div></div>
-          <div class="atoms-card"><h3>Staff revenue (14d)</h3><div class="atoms-metric">${money(d.staff_snapshot.staff_revenue || 0)}<div class="atoms-muted">${money(d.staff_snapshot.staff_profit || 0)} profit</div></div></div>
-          <div class="atoms-card"><h3>Top staff (14d)</h3><div class="atoms-metric">${money(d.staff_snapshot.top_staff_revenue || 0)}</div></div>
-          <div class="atoms-card"><h3>Active branches (14d)</h3><div class="atoms-metric">${d.staff_snapshot.branch_count || 0}<div class="atoms-muted">${money(d.staff_snapshot.branch_revenue || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Top branch (14d)</h3><div class="atoms-metric">${money(d.staff_snapshot.top_branch_revenue || 0)}</div></div>
-          <div class="atoms-card"><h3>Sales today</h3><div class="atoms-metric">${d.staff_snapshot.sales_today_count || 0}<div class="atoms-muted">${money(d.staff_snapshot.sales_today_total || 0)}</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.movement_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Stock movement</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Transfers today</h3><div class="atoms-metric">${d.movement_snapshot.transfer_count || 0}</div></div>
-          <div class="atoms-card"><h3>IMEIs registered today</h3><div class="atoms-metric">${d.movement_snapshot.imei_count || 0}</div></div>
-          <div class="atoms-card"><h3>Stock counts today</h3><div class="atoms-metric">${d.movement_snapshot.stock_count_count || 0}</div></div>
-          <div class="atoms-card"><h3>In transit</h3><div class="atoms-metric">${d.movement_snapshot.in_transit_count || 0}<div class="atoms-muted">${d.movement_snapshot.stuck_transfer_count || 0} stuck</div></div></div>
-          <div class="atoms-card"><h3>IMEI events (14d)</h3><div class="atoms-metric">${d.movement_snapshot.movement_14d_count || 0}<div class="atoms-muted">${d.movement_snapshot.sale_event_count || 0} sold · ${d.movement_snapshot.transfer_event_count || 0} transferred</div></div></div>
-          <div class="atoms-card"><h3>Intake events (14d)</h3><div class="atoms-metric">${d.movement_snapshot.intake_event_count || 0}</div></div>
-        </div>
-      </div>` : ''}
-      ${d.ledger_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Cash & consolidated ledger</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Receivables</h3><div class="atoms-metric">${money(d.ledger_snapshot.receivable_total || 0)}<div class="atoms-muted">${d.ledger_snapshot.receivable_party_count || 0} customers</div></div></div>
-          <div class="atoms-card"><h3>Payables</h3><div class="atoms-metric">${money(d.ledger_snapshot.payable_total || 0)}<div class="atoms-muted">${d.ledger_snapshot.payable_party_count || 0} suppliers</div></div></div>
-          <div class="atoms-card"><h3>Overdue</h3><div class="atoms-metric">${d.ledger_snapshot.overdue_count || 0}<div class="atoms-muted">${money(d.ledger_snapshot.overdue_total || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Net cash (14d)</h3><div class="atoms-metric">${money(d.ledger_snapshot.cash_net_14d || 0)}<div class="atoms-muted">${money(d.ledger_snapshot.cash_in_14d || 0)} in</div></div></div>
-          <div class="atoms-card"><h3>Net cash today</h3><div class="atoms-metric">${money(d.ledger_snapshot.cash_net_today || 0)}</div></div>
-          <div class="atoms-card"><h3>Sales (14d)</h3><div class="atoms-metric">${money(d.ledger_snapshot.sales_14d || 0)}<div class="atoms-muted">${money(d.ledger_snapshot.collected_14d || 0)} collected</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.repair_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Repairs & service</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Open repairs</h3><div class="atoms-metric">${d.repair_snapshot.open_repair_count || 0}<div class="atoms-muted">${d.repair_snapshot.stuck_repair_count || 0} stuck</div></div></div>
-          <div class="atoms-card"><h3>Completed today</h3><div class="atoms-metric">${d.repair_snapshot.completed_today_count || 0}</div></div>
-          <div class="atoms-card"><h3>Completed (14d)</h3><div class="atoms-metric">${d.repair_snapshot.completed_14d_count || 0}</div></div>
-          <div class="atoms-card"><h3>Faulty devices</h3><div class="atoms-metric">${d.repair_snapshot.faulty_device_count || 0}<div class="atoms-muted">${d.repair_snapshot.stuck_faulty_count || 0} stuck</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.compliance_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Audit & compliance</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Pending approvals</h3><div class="atoms-metric">${d.compliance_snapshot.pending_approval_count || 0}</div></div>
-          <div class="atoms-card"><h3>Approvals reviewed today</h3><div class="atoms-metric">${d.compliance_snapshot.approval_reviewed_today_count || 0}</div></div>
-          <div class="atoms-card"><h3>Audit events today</h3><div class="atoms-metric">${d.compliance_snapshot.audit_today_count || 0}</div></div>
-          <div class="atoms-card"><h3>Audit events (14d)</h3><div class="atoms-metric">${d.compliance_snapshot.audit_14d_count || 0}</div></div>
-          <div class="atoms-card"><h3>New customers today</h3><div class="atoms-metric">${d.compliance_snapshot.new_customer_today_count || 0}</div></div>
-          <div class="atoms-card"><h3>New customers (14d)</h3><div class="atoms-metric">${d.compliance_snapshot.new_customer_14d_count || 0}</div></div>
-        </div>
-      </div>` : ''}
-      ${d.trade_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Wholesale & trade</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Wholesale owing</h3><div class="atoms-metric">${money(d.trade_snapshot.wholesale_owing_total || 0)}<div class="atoms-muted">${d.trade_snapshot.wholesale_owing_count || 0} invoice(s)</div></div></div>
-          <div class="atoms-card"><h3>Retail owing</h3><div class="atoms-metric">${money(d.trade_snapshot.retail_owing_total || 0)}<div class="atoms-muted">${d.trade_snapshot.retail_owing_count || 0} invoice(s)</div></div></div>
-          <div class="atoms-card"><h3>Swaps today</h3><div class="atoms-metric">${d.trade_snapshot.swap_today_count || 0}<div class="atoms-muted">${money(d.trade_snapshot.swap_collected_today || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Swaps (14d)</h3><div class="atoms-metric">${d.trade_snapshot.swap_14d_count || 0}<div class="atoms-muted">${money(d.trade_snapshot.swap_collected_14d || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Retail sales (14d)</h3><div class="atoms-metric">${money(d.trade_snapshot.retail_sales_14d || 0)}<div class="atoms-muted">${d.trade_snapshot.retail_invoices_14d || 0} invoice(s)</div></div></div>
-          <div class="atoms-card"><h3>Wholesale sales (14d)</h3><div class="atoms-metric">${money(d.trade_snapshot.wholesale_sales_14d || 0)}<div class="atoms-muted">${d.trade_snapshot.wholesale_invoices_14d || 0} invoice(s)</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.aging_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Aging & payment mix</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Receivables aged</h3><div class="atoms-metric">${money(d.aging_snapshot.receivable_total || 0)}<div class="atoms-muted">${d.aging_snapshot.receivable_line_count || 0} open</div></div></div>
-          <div class="atoms-card"><h3>Receivables 90+</h3><div class="atoms-metric">${money(d.aging_snapshot.receivable_90_plus || 0)}</div></div>
-          <div class="atoms-card"><h3>Payables aged</h3><div class="atoms-metric">${money(d.aging_snapshot.payable_total || 0)}<div class="atoms-muted">${d.aging_snapshot.payable_line_count || 0} open</div></div></div>
-          <div class="atoms-card"><h3>Payables 90+</h3><div class="atoms-metric">${money(d.aging_snapshot.payable_90_plus || 0)}</div></div>
-          <div class="atoms-card"><h3>Collected (14d)</h3><div class="atoms-metric">${money(d.aging_snapshot.payment_collected_14d || 0)}<div class="atoms-muted">${d.aging_snapshot.payment_method_count || 0} methods</div></div></div>
-          <div class="atoms-card"><h3>Current receivables</h3><div class="atoms-metric">${money(d.aging_snapshot.receivable_0_30 || 0)}<div class="atoms-muted">${money(d.aging_snapshot.payable_0_30 || 0)} payables</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.executive_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Executive overview</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Sales today</h3><div class="atoms-metric">${money(d.executive_snapshot.sales_today_total || 0)}<div class="atoms-muted">${d.executive_snapshot.sales_today_count || 0} sale(s)</div></div></div>
-          <div class="atoms-card"><h3>Sales (14d)</h3><div class="atoms-metric">${money(d.executive_snapshot.sales_14d || 0)}</div></div>
-          <div class="atoms-card"><h3>Net cash today</h3><div class="atoms-metric">${money(d.executive_snapshot.cash_net_today || 0)}</div></div>
-          <div class="atoms-card"><h3>Net cash (14d)</h3><div class="atoms-metric">${money(d.executive_snapshot.cash_net_14d || 0)}</div></div>
-          <div class="atoms-card"><h3>Receivables</h3><div class="atoms-metric">${money(d.executive_snapshot.receivable_total || 0)}<div class="atoms-muted">${d.executive_snapshot.receivable_party_count || 0} customers</div></div></div>
-          <div class="atoms-card"><h3>Payables</h3><div class="atoms-metric">${money(d.executive_snapshot.payable_total || 0)}<div class="atoms-muted">${d.executive_snapshot.payable_party_count || 0} suppliers</div></div></div>
-          <div class="atoms-card"><h3>Overdue</h3><div class="atoms-metric">${d.executive_snapshot.overdue_count || 0}<div class="atoms-muted">${money(d.executive_snapshot.overdue_total || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Collections today</h3><div class="atoms-metric">${money(d.executive_snapshot.collections_today || 0)}</div></div>
-          <div class="atoms-card"><h3>Open repairs</h3><div class="atoms-metric">${d.executive_snapshot.open_repair_count || 0}</div></div>
-          <div class="atoms-card"><h3>Pending approvals</h3><div class="atoms-metric">${d.executive_snapshot.pending_approval_count || 0}</div></div>
-          <div class="atoms-card"><h3>In transit</h3><div class="atoms-metric">${d.executive_snapshot.in_transit_count || 0}</div></div>
-          <div class="atoms-card"><h3>Available stock</h3><div class="atoms-metric">${d.executive_snapshot.available_qty || 0}<div class="atoms-muted">${money(d.executive_snapshot.available_value || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Low stock</h3><div class="atoms-metric">${d.executive_snapshot.low_stock_count || 0}</div></div>
-          <div class="atoms-card"><h3>Unread alerts</h3><div class="atoms-metric">${d.executive_snapshot.notify_unread || 0}</div></div>
-        </div>
-      </div>` : ''}
-      ${d.branch_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Branch network</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Active branches</h3><div class="atoms-metric">${d.branch_snapshot.branch_count || 0}<div class="atoms-muted">${d.branch_snapshot.active_branch_count || 0} with sales</div></div></div>
-          <div class="atoms-card"><h3>Revenue (14d)</h3><div class="atoms-metric">${money(d.branch_snapshot.revenue_14d || 0)}<div class="atoms-muted">${d.branch_snapshot.invoice_count || 0} invoices</div></div></div>
-          <div class="atoms-card"><h3>Collected (14d)</h3><div class="atoms-metric">${money(d.branch_snapshot.collected_14d || 0)}</div></div>
-          <div class="atoms-card"><h3>Profit (14d)</h3><div class="atoms-metric">${money(d.branch_snapshot.profit_14d || 0)}</div></div>
-          <div class="atoms-card"><h3>Outstanding due</h3><div class="atoms-metric">${money(d.branch_snapshot.due_total || 0)}</div></div>
-          <div class="atoms-card"><h3>Network stock</h3><div class="atoms-metric">${d.branch_snapshot.stock_qty || 0}<div class="atoms-muted">${money(d.branch_snapshot.stock_value || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Top branch revenue</h3><div class="atoms-metric">${money(d.branch_snapshot.top_branch_revenue || 0)}</div></div>
-          <div class="atoms-card"><h3>Top branch profit</h3><div class="atoms-metric">${money(d.branch_snapshot.top_branch_profit || 0)}</div></div>
-        </div>
-      </div>` : ''}
-      ${d.mix_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Sales mix & channels</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Collected (14d)</h3><div class="atoms-metric">${money(d.mix_snapshot.payment_collected_14d || 0)}<div class="atoms-muted">${d.mix_snapshot.payment_method_count || 0} methods</div></div></div>
-          <div class="atoms-card"><h3>Top payment</h3><div class="atoms-metric">${money(d.mix_snapshot.top_payment_collected || 0)}<div class="atoms-muted">${escapeHtml(d.mix_snapshot.top_payment_method || '—')}</div></div></div>
-          <div class="atoms-card"><h3>Retail (14d)</h3><div class="atoms-metric">${money(d.mix_snapshot.retail_revenue || 0)}<div class="atoms-muted">${d.mix_snapshot.retail_invoices || 0} invoices</div></div></div>
-          <div class="atoms-card"><h3>Wholesale (14d)</h3><div class="atoms-metric">${money(d.mix_snapshot.wholesale_revenue || 0)}<div class="atoms-muted">${d.mix_snapshot.wholesale_invoices || 0} invoices</div></div></div>
-          <div class="atoms-card"><h3>Total sales (14d)</h3><div class="atoms-metric">${money(d.mix_snapshot.sales_14d || 0)}<div class="atoms-muted">${d.mix_snapshot.invoice_count || 0} invoices</div></div></div>
-          <div class="atoms-card"><h3>Sale channels</h3><div class="atoms-metric">${d.mix_snapshot.sale_type_count || 0}</div></div>
-        </div>
-      </div>` : ''}
-      ${d.product_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Product performance</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Top sellers (14d)</h3><div class="atoms-metric">${d.product_snapshot.top_seller_count || 0}<div class="atoms-muted">${d.product_snapshot.top_seller_units || 0} units · ${money(d.product_snapshot.top_seller_revenue || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Top seller profit</h3><div class="atoms-metric">${money(d.product_snapshot.top_seller_profit || 0)}</div></div>
-          <div class="atoms-card"><h3>Best product</h3><div class="atoms-metric">${money(d.product_snapshot.top_product_profit || 0)}<div class="atoms-muted">${escapeHtml(d.product_snapshot.top_product_name || '—')}</div></div></div>
-          <div class="atoms-card"><h3>Slow movers</h3><div class="atoms-metric">${d.product_snapshot.slow_mover_count || 0}<div class="atoms-muted">${d.product_snapshot.slow_mover_qty || 0} units</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.trend_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Sales trend & velocity</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Sales (14d)</h3><div class="atoms-metric">${money(d.trend_snapshot.sales_14d || 0)}<div class="atoms-muted">${d.trend_snapshot.invoice_count || 0} invoices · ${d.trend_snapshot.active_day_count || 0} active days</div></div></div>
-          <div class="atoms-card"><h3>Collected (14d)</h3><div class="atoms-metric">${money(d.trend_snapshot.collected_14d || 0)}</div></div>
-          <div class="atoms-card"><h3>Sales today</h3><div class="atoms-metric">${money(d.trend_snapshot.sales_today || 0)}<div class="atoms-muted">${d.trend_snapshot.invoices_today || 0} invoices</div></div></div>
-          <div class="atoms-card"><h3>Best day</h3><div class="atoms-metric">${money(d.trend_snapshot.best_day_net || 0)}<div class="atoms-muted">${escapeHtml(d.trend_snapshot.best_day_date || '—')}</div></div></div>
-          <div class="atoms-card"><h3>Avg daily sales</h3><div class="atoms-metric">${money(d.trend_snapshot.avg_daily_net || 0)}</div></div>
-        </div>
-      </div>` : ''}
-      ${d.cashflow_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Cash flow</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Cash in (14d)</h3><div class="atoms-metric">${money(d.cashflow_snapshot.inflows_14d || 0)}<div class="atoms-muted">${money(d.cashflow_snapshot.at_sale_14d || 0)} at sale · ${money(d.cashflow_snapshot.collections_14d || 0)} collected</div></div></div>
-          <div class="atoms-card"><h3>Outflows (14d)</h3><div class="atoms-metric">${money(d.cashflow_snapshot.outflows_14d || 0)}<div class="atoms-muted">${money(d.cashflow_snapshot.expenses_14d || 0)} expenses</div></div></div>
-          <div class="atoms-card"><h3>Net cash (14d)</h3><div class="atoms-metric">${money(d.cashflow_snapshot.net_14d || 0)}</div></div>
-          <div class="atoms-card"><h3>Supplier payments (14d)</h3><div class="atoms-metric">${money(d.cashflow_snapshot.supplier_payments_14d || 0)}</div></div>
-          <div class="atoms-card"><h3>Refunds (14d)</h3><div class="atoms-metric">${money(d.cashflow_snapshot.refunds_14d || 0)}</div></div>
-          <div class="atoms-card"><h3>Net cash today</h3><div class="atoms-metric">${money(d.cashflow_snapshot.net_today || 0)}<div class="atoms-muted">${money(d.cashflow_snapshot.inflows_today || 0)} in · ${money(d.cashflow_snapshot.outflows_today || 0)} out</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.staff_device_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Staff device sales</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Devices sold (14d)</h3><div class="atoms-metric">${d.staff_device_snapshot.device_line_count || 0}<div class="atoms-muted">${money(d.staff_device_snapshot.revenue_total || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Staff selling (14d)</h3><div class="atoms-metric">${d.staff_device_snapshot.staff_count || 0}<div class="atoms-muted">${d.staff_device_snapshot.invoice_count || 0} invoices</div></div></div>
-          <div class="atoms-card"><h3>Top staff (14d)</h3><div class="atoms-metric">${d.staff_device_snapshot.top_staff_units || 0}<div class="atoms-muted">${escapeHtml(d.staff_device_snapshot.top_staff_name || '—')}</div></div></div>
-          <div class="atoms-card"><h3>Devices today</h3><div class="atoms-metric">${d.staff_device_snapshot.devices_today || 0}<div class="atoms-muted">${money(d.staff_device_snapshot.revenue_today || 0)}</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.stock_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Low stock & replenishment</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Low stock alerts</h3><div class="atoms-metric">${d.stock_snapshot.low_stock_count || 0}<div class="atoms-muted">${d.stock_snapshot.low_stock_qty || 0} units · lowest ${d.stock_snapshot.lowest_available || 0}</div></div></div>
-          <div class="atoms-card"><h3>Available stock</h3><div class="atoms-metric">${d.stock_snapshot.available_qty || 0}<div class="atoms-muted">${money(d.stock_snapshot.available_value || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Accessory units</h3><div class="atoms-metric">${d.stock_snapshot.quantity_qty || 0}<div class="atoms-muted">${d.stock_snapshot.quantity_sku_count || 0} SKUs · ${money(d.stock_snapshot.quantity_value || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Inbound reserved</h3><div class="atoms-metric">${d.stock_snapshot.inbound_reserved_count || 0}</div></div>
-          <div class="atoms-card"><h3>Faulty units</h3><div class="atoms-metric">${d.stock_snapshot.faulty_qty || 0}</div></div>
-          <div class="atoms-card"><h3>IMEI on hand</h3><div class="atoms-metric">${d.stock_snapshot.imei_total || 0}<div class="atoms-muted">${d.stock_snapshot.status_count || 0} statuses</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.imei_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>IMEI status</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>IMEI on hand</h3><div class="atoms-metric">${d.imei_snapshot.imei_total || 0}<div class="atoms-muted">${d.imei_snapshot.status_count || 0} statuses</div></div></div>
-          <div class="atoms-card"><h3>Available</h3><div class="atoms-metric">${d.imei_snapshot.available_qty || 0}</div></div>
-          <div class="atoms-card"><h3>Sold</h3><div class="atoms-metric">${d.imei_snapshot.sold_qty || 0}</div></div>
-          <div class="atoms-card"><h3>Faulty</h3><div class="atoms-metric">${d.imei_snapshot.faulty_qty || 0}<div class="atoms-muted">${d.imei_snapshot.under_repair_qty || 0} under repair</div></div></div>
-          <div class="atoms-card"><h3>Reserved</h3><div class="atoms-metric">${d.imei_snapshot.reserved_qty || 0}</div></div>
-          <div class="atoms-card"><h3>In transit</h3><div class="atoms-metric">${d.imei_snapshot.transferred_qty || 0}</div></div>
-          <div class="atoms-card"><h3>Registered today</h3><div class="atoms-metric">${d.imei_snapshot.registered_today || 0}</div></div>
-        </div>
-      </div>` : ''}
-      ${d.transfer_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Transfers & transit</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>In transit</h3><div class="atoms-metric">${d.transfer_snapshot.in_transit_count || 0}<div class="atoms-muted">${d.transfer_snapshot.in_transit_devices || 0} devices · ${d.transfer_snapshot.stuck_transfer_count || 0} stuck</div></div></div>
-          <div class="atoms-card"><h3>Outbound</h3><div class="atoms-metric">${d.transfer_snapshot.outbound_in_transit || 0}<div class="atoms-muted">leaving this branch</div></div></div>
-          <div class="atoms-card"><h3>Inbound</h3><div class="atoms-metric">${d.transfer_snapshot.inbound_in_transit || 0}<div class="atoms-muted">arriving here</div></div></div>
-          <div class="atoms-card"><h3>Transfers today</h3><div class="atoms-metric">${d.transfer_snapshot.transfer_count_today || 0}<div class="atoms-muted">${d.transfer_snapshot.dispatched_today || 0} dispatched · ${d.transfer_snapshot.received_today || 0} received</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.purchase_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Purchases & open POs</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Open POs</h3><div class="atoms-metric">${d.purchase_snapshot.open_po_count || 0}<div class="atoms-muted">${money(d.purchase_snapshot.open_po_total || 0)} · ${d.purchase_snapshot.pending_units || 0} units pending</div></div></div>
-          <div class="atoms-card"><h3>Ordered</h3><div class="atoms-metric">${d.purchase_snapshot.ordered_count || 0}</div></div>
-          <div class="atoms-card"><h3>Inspecting</h3><div class="atoms-metric">${d.purchase_snapshot.inspecting_count || 0}</div></div>
-          <div class="atoms-card"><h3>Purchases today</h3><div class="atoms-metric">${d.purchase_snapshot.purchase_count_today || 0}<div class="atoms-muted">${money(d.purchase_snapshot.purchase_total_today || 0)} · ${d.purchase_snapshot.purchase_units_today || 0} units</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.returns_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Returns & swaps</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Returns today</h3><div class="atoms-metric">${d.returns_snapshot.return_count_today || 0}<div class="atoms-muted">${money(d.returns_snapshot.return_total_today || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Returns (14d)</h3><div class="atoms-metric">${d.returns_snapshot.return_count_14d || 0}<div class="atoms-muted">${money(d.returns_snapshot.return_total_14d || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Swaps today</h3><div class="atoms-metric">${d.returns_snapshot.swap_count_today || 0}<div class="atoms-muted">${money(d.returns_snapshot.swap_collected_today || 0)} collected</div></div></div>
-          <div class="atoms-card"><h3>Adjustments today</h3><div class="atoms-metric">${(d.returns_snapshot.reversal_count_today || 0) + (d.returns_snapshot.voided_count_today || 0)}<div class="atoms-muted">${money((d.returns_snapshot.reversal_total_today || 0) + (d.returns_snapshot.voided_total_today || 0))} reversals & voids</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.faulty_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Repair & faulty queue</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Faulty devices</h3><div class="atoms-metric">${d.faulty_snapshot.faulty_device_count || 0}<div class="atoms-muted">${d.faulty_snapshot.stuck_faulty_count || 0} stuck · ${d.faulty_snapshot.under_repair_qty || 0} under repair</div></div></div>
-          <div class="atoms-card"><h3>Open repairs</h3><div class="atoms-metric">${d.faulty_snapshot.open_repair_count || 0}<div class="atoms-muted">${d.faulty_snapshot.stuck_repair_count || 0} stuck</div></div></div>
-          <div class="atoms-card"><h3>Completed today</h3><div class="atoms-metric">${d.faulty_snapshot.repair_completed_today || 0}</div></div>
-          <div class="atoms-card"><h3>Completed (14d)</h3><div class="atoms-metric">${d.faulty_snapshot.repair_completed_14d || 0}<div class="atoms-muted">${d.faulty_snapshot.returned_qty || 0} returned IMEIs</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.customer_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Customers & receivables</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>New today</h3><div class="atoms-metric">${d.customer_snapshot.new_customers_today || 0}<div class="atoms-muted">${d.customer_snapshot.new_customers_14d || 0} in 14 days</div></div></div>
-          <div class="atoms-card"><h3>Customers owing</h3><div class="atoms-metric">${d.customer_snapshot.owing_customer_count || 0}<div class="atoms-muted">${money(d.customer_snapshot.receivable_total || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Overdue</h3><div class="atoms-metric">${d.customer_snapshot.overdue_count || 0}<div class="atoms-muted">${money(d.customer_snapshot.overdue_total || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Retail / wholesale</h3><div class="atoms-metric">${d.customer_snapshot.retail_owing_count || 0}<div class="atoms-muted">${d.customer_snapshot.wholesale_owing_count || 0} wholesale owing</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.supplier_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Suppliers & payables</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Suppliers owing</h3><div class="atoms-metric">${d.supplier_snapshot.owing_supplier_count || 0}<div class="atoms-muted">${money(d.supplier_snapshot.payable_total || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Open payables</h3><div class="atoms-metric">${d.supplier_snapshot.open_payable_count || 0}<div class="atoms-muted">${money(d.supplier_snapshot.open_payable_total || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Aged payables</h3><div class="atoms-metric">${d.supplier_snapshot.aged_payable_count || 0}<div class="atoms-muted">${money(d.supplier_snapshot.aged_payable_total || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Open POs</h3><div class="atoms-metric">${d.supplier_snapshot.open_po_count || 0}<div class="atoms-muted">${money(d.supplier_snapshot.open_po_total || 0)} · ${money(d.supplier_snapshot.supplier_payment_total_today || 0)} paid today</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.count_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Stock counts</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Open counts</h3><div class="atoms-metric">${d.count_snapshot.open_count_count || 0}<div class="atoms-muted">${d.count_snapshot.pending_approval_count || 0} pending approval</div></div></div>
-          <div class="atoms-card"><h3>Open variance</h3><div class="atoms-metric">${d.count_snapshot.open_missing_units || 0}<div class="atoms-muted">${d.count_snapshot.open_extra_units || 0} extra units</div></div></div>
-          <div class="atoms-card"><h3>Posted today</h3><div class="atoms-metric">${d.count_snapshot.posted_today_count || 0}<div class="atoms-muted">${d.count_snapshot.missing_units_today || 0} missing units</div></div></div>
-          <div class="atoms-card"><h3>Posted (14d)</h3><div class="atoms-metric">${d.count_snapshot.posted_14d_count || 0}<div class="atoms-muted">${d.count_snapshot.missing_units_14d || 0} missing units</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.approval_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Approvals</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Pending queue</h3><div class="atoms-metric">${d.approval_snapshot.pending_count || 0}<div class="atoms-muted">${d.approval_snapshot.reviewed_today_count || 0} reviewed today</div></div></div>
-          <div class="atoms-card"><h3>Sell below minimum</h3><div class="atoms-metric">${d.approval_snapshot.price_override_count || 0}</div></div>
-          <div class="atoms-card"><h3>Expense / stock</h3><div class="atoms-metric">${d.approval_snapshot.expense_count || 0}<div class="atoms-muted">${d.approval_snapshot.stock_variance_count || 0} stock variances</div></div></div>
-          <div class="atoms-card"><h3>Decisions today</h3><div class="atoms-metric">${d.approval_snapshot.approved_today_count || 0}<div class="atoms-muted">${d.approval_snapshot.rejected_today_count || 0} rejected</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.expense_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Expenses</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Pending approval</h3><div class="atoms-metric">${d.expense_snapshot.pending_count || 0}<div class="atoms-muted">${money(d.expense_snapshot.pending_total || 0)} · max ${money(d.expense_snapshot.largest_pending_amount || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Posted today</h3><div class="atoms-metric">${d.expense_snapshot.posted_today_count || 0}<div class="atoms-muted">${money(d.expense_snapshot.posted_today_total || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Posted (14d)</h3><div class="atoms-metric">${money(d.expense_snapshot.posted_14d_total || 0)}<div class="atoms-muted">${d.expense_snapshot.posted_14d_count || 0} expenses</div></div></div>
-          <div class="atoms-card"><h3>Top category (14d)</h3><div class="atoms-metric">${d.expense_snapshot.top_category_14d ? badge(d.expense_snapshot.top_category_14d) : '—'}<div class="atoms-muted">${money(d.expense_snapshot.top_category_total_14d || 0)} · ${d.expense_snapshot.category_count_14d || 0} categories</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.audit_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Audit trail</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Events today</h3><div class="atoms-metric">${d.audit_snapshot.event_count_today || 0}<div class="atoms-muted">${d.audit_snapshot.event_count_14d || 0} in 14 days</div></div></div>
-          <div class="atoms-card"><h3>Active users</h3><div class="atoms-metric">${d.audit_snapshot.user_count_14d || 0}<div class="atoms-muted">${d.audit_snapshot.entity_type_count_14d || 0} entity types</div></div></div>
-          <div class="atoms-card"><h3>Sales / approvals</h3><div class="atoms-metric">${d.audit_snapshot.sale_event_count_14d || 0}<div class="atoms-muted">${d.audit_snapshot.approval_event_count_14d || 0} approval events</div></div></div>
-          <div class="atoms-card"><h3>Inventory events</h3><div class="atoms-metric">${d.audit_snapshot.inventory_event_count_14d || 0}<div class="atoms-muted">${escapeHtml((d.audit_snapshot.top_action_14d || '—').replace(/\./g, ' '))}</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.collection_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Collections</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Collected today</h3><div class="atoms-metric">${money(d.collection_snapshot.collection_total_today || 0)}<div class="atoms-muted">${d.collection_snapshot.collection_count_today || 0} payments</div></div></div>
-          <div class="atoms-card"><h3>Collected (14d)</h3><div class="atoms-metric">${money(d.collection_snapshot.collection_total_14d || 0)}<div class="atoms-muted">${d.collection_snapshot.collection_count_14d || 0} payments</div></div></div>
-          <div class="atoms-card"><h3>Overdue</h3><div class="atoms-metric">${d.collection_snapshot.overdue_count || 0}<div class="atoms-muted">${money(d.collection_snapshot.overdue_total || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Open receivables</h3><div class="atoms-metric">${money(d.collection_snapshot.receivable_total || 0)}<div class="atoms-muted">${d.collection_snapshot.owing_customer_count || 0} customers · ${d.collection_snapshot.open_invoice_count || 0} invoices</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.alert_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Alerts</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Unread</h3><div class="atoms-metric">${d.alert_snapshot.unread_count || 0}<div class="atoms-muted">${d.alert_snapshot.alert_count_today || 0} today</div></div></div>
-          <div class="atoms-card"><h3>Alerts (14d)</h3><div class="atoms-metric">${d.alert_snapshot.alert_count_14d || 0}</div></div>
-          <div class="atoms-card"><h3>Stock & debt</h3><div class="atoms-metric">${(d.alert_snapshot.low_stock_alert_count_14d || 0) + (d.alert_snapshot.debt_alert_count_14d || 0)}<div class="atoms-muted">${d.alert_snapshot.low_stock_alert_count_14d || 0} stock · ${d.alert_snapshot.debt_alert_count_14d || 0} debt</div></div></div>
-          <div class="atoms-card"><h3>Workflow</h3><div class="atoms-metric">${(d.alert_snapshot.approval_alert_count_14d || 0) + (d.alert_snapshot.ops_alert_count_14d || 0)}<div class="atoms-muted">${d.alert_snapshot.approval_alert_count_14d || 0} approvals · ${d.alert_snapshot.ops_alert_count_14d || 0} ops</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.sales_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Sales</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Sales today</h3><div class="atoms-metric">${money(d.sales_snapshot.sale_total_today || 0)}<div class="atoms-muted">${d.sales_snapshot.sale_count_today || 0} invoices</div></div></div>
-          <div class="atoms-card"><h3>Collected today</h3><div class="atoms-metric">${money(d.sales_snapshot.collected_today || 0)}<div class="atoms-muted">${money(d.sales_snapshot.due_total_today || 0)} due</div></div></div>
-          <div class="atoms-card"><h3>Sales (14d)</h3><div class="atoms-metric">${money(d.sales_snapshot.sale_total_14d || 0)}<div class="atoms-muted">${d.sales_snapshot.sale_count_14d || 0} invoices · ${money(d.sales_snapshot.collected_14d || 0)} collected</div></div></div>
-          <div class="atoms-card"><h3>Mix & voids</h3><div class="atoms-metric">${d.sales_snapshot.retail_count_14d || 0} retail<div class="atoms-muted">${d.sales_snapshot.wholesale_count_14d || 0} wholesale · ${d.sales_snapshot.voided_count_today || 0} voided today</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.payment_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Payments</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Customer today</h3><div class="atoms-metric">${money(d.payment_snapshot.customer_payment_total_today || 0)}<div class="atoms-muted">${d.payment_snapshot.customer_payment_count_today || 0} payments</div></div></div>
-          <div class="atoms-card"><h3>Customer (14d)</h3><div class="atoms-metric">${money(d.payment_snapshot.customer_payment_total_14d || 0)}<div class="atoms-muted">${d.payment_snapshot.customer_payment_count_14d || 0} payments</div></div></div>
-          <div class="atoms-card"><h3>Supplier today</h3><div class="atoms-metric">${money(d.payment_snapshot.supplier_payment_total_today || 0)}<div class="atoms-muted">${d.payment_snapshot.supplier_payment_count_today || 0} payments</div></div></div>
-          <div class="atoms-card"><h3>Reversals</h3><div class="atoms-metric">${d.payment_snapshot.reversal_count_today || 0}<div class="atoms-muted">${money(d.payment_snapshot.reversal_total_today || 0)} today · ${d.payment_snapshot.reversal_count_14d || 0} in 14d</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.swap_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Swaps</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Swaps today</h3><div class="atoms-metric">${d.swap_snapshot.swap_count_today || 0}<div class="atoms-muted">${money(d.swap_snapshot.collected_today || 0)} collected</div></div></div>
-          <div class="atoms-card"><h3>Difference today</h3><div class="atoms-metric">${money(d.swap_snapshot.difference_total_today || 0)}</div></div>
-          <div class="atoms-card"><h3>Swaps (14d)</h3><div class="atoms-metric">${d.swap_snapshot.swap_count_14d || 0}<div class="atoms-muted">${money(d.swap_snapshot.collected_14d || 0)} collected · ${money(d.swap_snapshot.difference_total_14d || 0)} diff</div></div></div>
-          <div class="atoms-card"><h3>Upgrade / downgrade</h3><div class="atoms-metric">${d.swap_snapshot.upgrade_count_14d || 0} up<div class="atoms-muted">${d.swap_snapshot.downgrade_count_14d || 0} down · ${d.swap_snapshot.even_swap_count_14d || 0} even</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.return_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Returns</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Returns today</h3><div class="atoms-metric">${d.return_snapshot.return_count_today || 0}<div class="atoms-muted">${money(d.return_snapshot.return_total_today || 0)} refunded</div></div></div>
-          <div class="atoms-card"><h3>Returns (14d)</h3><div class="atoms-metric">${d.return_snapshot.return_count_14d || 0}<div class="atoms-muted">${money(d.return_snapshot.return_total_14d || 0)} refunded</div></div></div>
-          <div class="atoms-card"><h3>Resolutions</h3><div class="atoms-metric">${d.return_snapshot.refund_resolution_count_14d || 0} refunds<div class="atoms-muted">${d.return_snapshot.replacement_resolution_count_14d || 0} replacements</div></div></div>
-          <div class="atoms-card"><h3>Faulty & warranty</h3><div class="atoms-metric">${d.return_snapshot.faulty_return_count_14d || 0} faulty<div class="atoms-muted">${d.return_snapshot.warranty_return_count_14d || 0} warranty</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.adjustment_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Adjustments</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Reversals today</h3><div class="atoms-metric">${d.adjustment_snapshot.reversal_count_today || 0}<div class="atoms-muted">${money(d.adjustment_snapshot.reversal_total_today || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Voided today</h3><div class="atoms-metric">${d.adjustment_snapshot.voided_count_today || 0}<div class="atoms-muted">${money(d.adjustment_snapshot.voided_total_today || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Adjustments (14d)</h3><div class="atoms-metric">${(d.adjustment_snapshot.reversal_count_14d || 0) + (d.adjustment_snapshot.voided_count_14d || 0)}<div class="atoms-muted">${money((d.adjustment_snapshot.reversal_total_14d || 0) + (d.adjustment_snapshot.voided_total_14d || 0))}</div></div></div>
-          <div class="atoms-card"><h3>Total today</h3><div class="atoms-metric">${d.adjustment_snapshot.adjustment_count_today || 0}<div class="atoms-muted">${money(d.adjustment_snapshot.adjustment_total_today || 0)}</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.procurement_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Procurement</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Open POs</h3><div class="atoms-metric">${d.procurement_snapshot.open_po_count || 0}<div class="atoms-muted">${money(d.procurement_snapshot.open_po_total || 0)} · ${d.procurement_snapshot.pending_units || 0} units pending</div></div></div>
-          <div class="atoms-card"><h3>Ordered / inspecting</h3><div class="atoms-metric">${d.procurement_snapshot.ordered_count || 0}<div class="atoms-muted">${d.procurement_snapshot.inspecting_count || 0} inspecting</div></div></div>
-          <div class="atoms-card"><h3>Purchases today</h3><div class="atoms-metric">${d.procurement_snapshot.purchase_count_today || 0}<div class="atoms-muted">${money(d.procurement_snapshot.purchase_total_today || 0)} · ${d.procurement_snapshot.purchase_units_today || 0} units</div></div></div>
-          <div class="atoms-card"><h3>Purchases (14d)</h3><div class="atoms-metric">${d.procurement_snapshot.purchase_count_14d || 0}<div class="atoms-muted">${money(d.procurement_snapshot.purchase_total_14d || 0)} · ${d.procurement_snapshot.purchase_units_14d || 0} units</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.receiving_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Receiving</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Purchases today</h3><div class="atoms-metric">${d.receiving_snapshot.purchase_count_today || 0}<div class="atoms-muted">${money(d.receiving_snapshot.purchase_total_today || 0)} · ${d.receiving_snapshot.purchase_count_14d || 0} in 14d</div></div></div>
-          <div class="atoms-card"><h3>IMEIs today</h3><div class="atoms-metric">${d.receiving_snapshot.imei_count_today || 0}<div class="atoms-muted">${d.receiving_snapshot.imei_count_14d || 0} in 14 days</div></div></div>
-          <div class="atoms-card"><h3>Supplier payments</h3><div class="atoms-metric">${d.receiving_snapshot.supplier_payment_count_today || 0}<div class="atoms-muted">${money(d.receiving_snapshot.supplier_payment_total_today || 0)} today · ${money(d.receiving_snapshot.supplier_payment_total_14d || 0)} in 14d</div></div></div>
-          <div class="atoms-card"><h3>Swaps & returns</h3><div class="atoms-metric">${(d.receiving_snapshot.swap_count_today || 0) + (d.receiving_snapshot.supplier_return_count_today || 0)}<div class="atoms-muted">${d.receiving_snapshot.receiving_count_today || 0} events today · ${d.receiving_snapshot.receiving_count_14d || 0} in 14d</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.payable_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Payables</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Suppliers owing</h3><div class="atoms-metric">${d.payable_snapshot.owing_supplier_count || 0}<div class="atoms-muted">${money(d.payable_snapshot.payable_total || 0)} outstanding</div></div></div>
-          <div class="atoms-card"><h3>Open payables</h3><div class="atoms-metric">${d.payable_snapshot.open_payable_count || 0}<div class="atoms-muted">${money(d.payable_snapshot.open_payable_total || 0)} · ${d.payable_snapshot.aged_payable_count || 0} aged</div></div></div>
-          <div class="atoms-card"><h3>Open POs</h3><div class="atoms-metric">${d.payable_snapshot.open_po_count || 0}<div class="atoms-muted">${money(d.payable_snapshot.open_po_total || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Payments & returns</h3><div class="atoms-metric">${money(d.payable_snapshot.supplier_payment_total_today || 0)}<div class="atoms-muted">${money(d.payable_snapshot.supplier_payment_total_14d || 0)} paid in 14d · ${money(d.payable_snapshot.supplier_return_total_today || 0)} returned today</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.receivable_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Receivables</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Customers owing</h3><div class="atoms-metric">${d.receivable_snapshot.owing_customer_count || 0}<div class="atoms-muted">${money(d.receivable_snapshot.receivable_total || 0)} outstanding</div></div></div>
-          <div class="atoms-card"><h3>Overdue</h3><div class="atoms-metric">${d.receivable_snapshot.overdue_count || 0}<div class="atoms-muted">${money(d.receivable_snapshot.overdue_total || 0)} · ${d.receivable_snapshot.open_invoice_count || 0} open invoices</div></div></div>
-          <div class="atoms-card"><h3>Retail / wholesale</h3><div class="atoms-metric">${d.receivable_snapshot.retail_owing_count || 0}<div class="atoms-muted">${d.receivable_snapshot.wholesale_owing_count || 0} wholesale · ${d.receivable_snapshot.new_customers_today || 0} new today</div></div></div>
-          <div class="atoms-card"><h3>Collections</h3><div class="atoms-metric">${money(d.receivable_snapshot.collection_total_today || 0)}<div class="atoms-muted">${money(d.receivable_snapshot.collection_total_14d || 0)} in 14d · ${d.receivable_snapshot.new_customers_14d || 0} new customers</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.workflow_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Workflow</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Open repairs</h3><div class="atoms-metric">${d.workflow_snapshot.open_repair_count || 0}<div class="atoms-muted">${d.workflow_snapshot.stuck_repair_count || 0} stuck · ${d.workflow_snapshot.repair_completed_today || 0} done today</div></div></div>
-          <div class="atoms-card"><h3>Approvals & transit</h3><div class="atoms-metric">${d.workflow_snapshot.pending_approval_count || 0}<div class="atoms-muted">${d.workflow_snapshot.in_transit_count || 0} in transit · ${d.workflow_snapshot.stuck_transfer_count || 0} stuck</div></div></div>
-          <div class="atoms-card"><h3>Counts & faulty</h3><div class="atoms-metric">${d.workflow_snapshot.open_stock_count_count || 0}<div class="atoms-muted">${d.workflow_snapshot.faulty_device_count || 0} faulty · ${d.workflow_snapshot.stuck_faulty_count || 0} stuck</div></div></div>
-          <div class="atoms-card"><h3>Activity</h3><div class="atoms-metric">${d.workflow_snapshot.workflow_events_today || 0}<div class="atoms-muted">${d.workflow_snapshot.workflow_events_14d || 0} events in 14d · ${money(d.workflow_snapshot.expense_posted_total_today || 0)} expenses today</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.transit_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Transit</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>In transit</h3><div class="atoms-metric">${d.transit_snapshot.in_transit_count || 0}<div class="atoms-muted">${d.transit_snapshot.in_transit_devices || 0} devices · ${d.transit_snapshot.stuck_transfer_count || 0} stuck</div></div></div>
-          <div class="atoms-card"><h3>Outbound / inbound</h3><div class="atoms-metric">${d.transit_snapshot.outbound_in_transit || 0}<div class="atoms-muted">${d.transit_snapshot.inbound_in_transit || 0} inbound · ${d.transit_snapshot.stuck_device_count || 0} stuck devices</div></div></div>
-          <div class="atoms-card"><h3>Transfers today</h3><div class="atoms-metric">${d.transit_snapshot.transfer_count_today || 0}<div class="atoms-muted">${d.transit_snapshot.dispatched_today || 0} dispatched · ${d.transit_snapshot.received_today || 0} received</div></div></div>
-          <div class="atoms-card"><h3>Transfers (14d)</h3><div class="atoms-metric">${d.transit_snapshot.transfer_count_14d || 0}<div class="atoms-muted">${d.transit_snapshot.dispatched_14d || 0} dispatched · ${d.transit_snapshot.devices_moved_14d || 0} devices moved</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.stockflow_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Stock overview</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Available stock</h3><div class="atoms-metric">${d.stockflow_snapshot.available_qty || 0}<div class="atoms-muted">${money(d.stockflow_snapshot.available_value || 0)} · ${money(d.stockflow_snapshot.on_hand_value || 0)} on hand</div></div></div>
-          <div class="atoms-card"><h3>Low stock</h3><div class="atoms-metric">${d.stockflow_snapshot.low_stock_count || 0}<div class="atoms-muted">${d.stockflow_snapshot.low_stock_qty || 0} units · lowest ${d.stockflow_snapshot.lowest_available || 0}</div></div></div>
-          <div class="atoms-card"><h3>Faulty & IMEI</h3><div class="atoms-metric">${d.stockflow_snapshot.faulty_qty || 0}<div class="atoms-muted">${d.stockflow_snapshot.imei_total || 0} IMEI · ${d.stockflow_snapshot.imei_available || 0} available</div></div></div>
-          <div class="atoms-card"><h3>Flow (14d)</h3><div class="atoms-metric">${d.stockflow_snapshot.imei_registered_14d || 0}<div class="atoms-muted">${d.stockflow_snapshot.imei_registered_today || 0} today · ${d.stockflow_snapshot.slow_mover_count || 0} slow movers</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.service_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Service</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Open repairs</h3><div class="atoms-metric">${d.service_snapshot.open_repair_count || 0}<div class="atoms-muted">${d.service_snapshot.stuck_repair_count || 0} stuck · ${d.service_snapshot.repair_opened_today || 0} opened today</div></div></div>
-          <div class="atoms-card"><h3>Faulty queue</h3><div class="atoms-metric">${d.service_snapshot.faulty_device_count || 0}<div class="atoms-muted">${d.service_snapshot.stuck_faulty_count || 0} stuck · ${d.service_snapshot.under_repair_qty || 0} under repair</div></div></div>
-          <div class="atoms-card"><h3>Completed</h3><div class="atoms-metric">${d.service_snapshot.repair_completed_today || 0}<div class="atoms-muted">${d.service_snapshot.repair_completed_14d || 0} in 14d · ${d.service_snapshot.repair_intake_14d || 0} intake</div></div></div>
-          <div class="atoms-card"><h3>Returns</h3><div class="atoms-metric">${d.service_snapshot.return_count_today || 0}<div class="atoms-muted">${d.service_snapshot.return_count_14d || 0} in 14d · ${d.service_snapshot.service_queue_total || 0} in queue</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.countflow_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Stock counts</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Open counts</h3><div class="atoms-metric">${d.countflow_snapshot.open_count_count || 0}<div class="atoms-muted">${d.countflow_snapshot.pending_approval_count || 0} pending · ${d.countflow_snapshot.count_queue_total || 0} in queue</div></div></div>
-          <div class="atoms-card"><h3>Variance open</h3><div class="atoms-metric">${d.countflow_snapshot.open_missing_units || 0}<div class="atoms-muted">${d.countflow_snapshot.open_extra_units || 0} extra · ${d.countflow_snapshot.stock_variance_pending || 0} approvals</div></div></div>
-          <div class="atoms-card"><h3>Posted today</h3><div class="atoms-metric">${d.countflow_snapshot.posted_today_count || 0}<div class="atoms-muted">${d.countflow_snapshot.missing_units_today || 0} missing · ${d.countflow_snapshot.extra_units_today || 0} extra</div></div></div>
-          <div class="atoms-card"><h3>Posted (14d)</h3><div class="atoms-metric">${d.countflow_snapshot.posted_14d_count || 0}<div class="atoms-muted">${d.countflow_snapshot.missing_units_14d || 0} missing · ${d.countflow_snapshot.extra_units_14d || 0} extra</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.approvalflow_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Pending approvals</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Pending</h3><div class="atoms-metric">${d.approvalflow_snapshot.pending_count || 0}<div class="atoms-muted">${d.approvalflow_snapshot.pending_type_count || 0} types · ${d.approvalflow_snapshot.price_override_count || 0} price overrides</div></div></div>
-          <div class="atoms-card"><h3>Expense / variance</h3><div class="atoms-metric">${d.approvalflow_snapshot.expense_count || 0}<div class="atoms-muted">${d.approvalflow_snapshot.stock_variance_count || 0} stock variances pending</div></div></div>
-          <div class="atoms-card"><h3>Reviewed today</h3><div class="atoms-metric">${d.approvalflow_snapshot.reviewed_today_count || 0}<div class="atoms-muted">${d.approvalflow_snapshot.approved_today_count || 0} approved · ${d.approvalflow_snapshot.rejected_today_count || 0} rejected</div></div></div>
-          <div class="atoms-card"><h3>Reviewed (14d)</h3><div class="atoms-metric">${d.approvalflow_snapshot.reviewed_14d_count || 0}<div class="atoms-muted">${d.approvalflow_snapshot.approved_14d_count || 0} approved · ${d.approvalflow_snapshot.rejected_14d_count || 0} rejected</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.auditflow_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Activity log</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Events today</h3><div class="atoms-metric">${d.auditflow_snapshot.event_count_today || 0}<div class="atoms-muted">${d.auditflow_snapshot.users_today || 0} users active</div></div></div>
-          <div class="atoms-card"><h3>Events (14d)</h3><div class="atoms-metric">${d.auditflow_snapshot.event_count_14d || 0}<div class="atoms-muted">${d.auditflow_snapshot.user_count_14d || 0} users · ${d.auditflow_snapshot.entity_type_count_14d || 0} entity types</div></div></div>
-          <div class="atoms-card"><h3>Sales & payments</h3><div class="atoms-metric">${d.auditflow_snapshot.sale_event_count_14d || 0}<div class="atoms-muted">${d.auditflow_snapshot.payment_event_count_14d || 0} payment events in 14d</div></div></div>
-          <div class="atoms-card"><h3>Inventory & transfer</h3><div class="atoms-metric">${d.auditflow_snapshot.inventory_event_count_14d || 0}<div class="atoms-muted">${d.auditflow_snapshot.transfer_event_count_14d || 0} transfers · top ${escapeHtml(d.auditflow_snapshot.top_action_14d || '—')}</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.collectionflow_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Payment collections</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Receivables</h3><div class="atoms-metric">${money(d.collectionflow_snapshot.receivable_total || 0)}<div class="atoms-muted">${d.collectionflow_snapshot.owing_customer_count || 0} customers · ${d.collectionflow_snapshot.overdue_share_pct || 0}% overdue</div></div></div>
-          <div class="atoms-card"><h3>Overdue</h3><div class="atoms-metric">${d.collectionflow_snapshot.overdue_count || 0}<div class="atoms-muted">${money(d.collectionflow_snapshot.overdue_total || 0)} · ${d.collectionflow_snapshot.open_invoice_count || 0} open invoices</div></div></div>
-          <div class="atoms-card"><h3>Collections today</h3><div class="atoms-metric">${money(d.collectionflow_snapshot.collection_total_today || 0)}<div class="atoms-muted">${d.collectionflow_snapshot.collection_count_today || 0} payments · avg ${money(d.collectionflow_snapshot.avg_collection_today || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Collections (14d)</h3><div class="atoms-metric">${money(d.collectionflow_snapshot.collection_total_14d || 0)}<div class="atoms-muted">${d.collectionflow_snapshot.collection_count_14d || 0} payments · ${d.collectionflow_snapshot.retail_owing_count || 0} retail · ${d.collectionflow_snapshot.wholesale_owing_count || 0} wholesale</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.alertflow_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Alerts summary</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Unread</h3><div class="atoms-metric">${d.alertflow_snapshot.unread_count || 0}<div class="atoms-muted">${d.alertflow_snapshot.unread_today || 0} today · ${d.alertflow_snapshot.read_today || 0} read today</div></div></div>
-          <div class="atoms-card"><h3>Alerts today</h3><div class="atoms-metric">${d.alertflow_snapshot.alert_count_today || 0}<div class="atoms-muted">${d.alertflow_snapshot.alert_types_active || 0} active types in 14d</div></div></div>
-          <div class="atoms-card"><h3>Stock & debt</h3><div class="atoms-metric">${d.alertflow_snapshot.low_stock_alert_count_14d || 0}<div class="atoms-muted">${d.alertflow_snapshot.debt_alert_count_14d || 0} debt alerts in 14d</div></div></div>
-          <div class="atoms-card"><h3>Approval & ops</h3><div class="atoms-metric">${d.alertflow_snapshot.approval_alert_count_14d || 0}<div class="atoms-muted">${d.alertflow_snapshot.ops_alert_count_14d || 0} ops · ${d.alertflow_snapshot.alert_count_14d || 0} total in 14d</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.expenseflow_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Expenses summary</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Pending</h3><div class="atoms-metric">${money(d.expenseflow_snapshot.pending_total || 0)}<div class="atoms-muted">${d.expenseflow_snapshot.pending_count || 0} items · max ${money(d.expenseflow_snapshot.largest_pending_amount || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Approval queue</h3><div class="atoms-metric">${d.expenseflow_snapshot.approval_pending_count || 0}<div class="atoms-muted">${d.expenseflow_snapshot.category_count_14d || 0} categories in 14d</div></div></div>
-          <div class="atoms-card"><h3>Posted today</h3><div class="atoms-metric">${money(d.expenseflow_snapshot.posted_today_total || 0)}<div class="atoms-muted">${d.expenseflow_snapshot.posted_today_count || 0} posted · avg ${money(d.expenseflow_snapshot.avg_posted_today || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Posted (14d)</h3><div class="atoms-metric">${money(d.expenseflow_snapshot.posted_14d_total || 0)}<div class="atoms-muted">${d.expenseflow_snapshot.posted_14d_count || 0} posted · top ${escapeHtml(d.expenseflow_snapshot.top_category_14d || '—')}</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.performanceflow_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Inventory performance</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Low stock</h3><div class="atoms-metric">${d.performanceflow_snapshot.low_stock_count || 0}<div class="atoms-muted">${d.performanceflow_snapshot.low_stock_qty || 0} units on hand</div></div></div>
-          <div class="atoms-card"><h3>Slow movers</h3><div class="atoms-metric">${d.performanceflow_snapshot.slow_mover_count || 0}<div class="atoms-muted">${d.performanceflow_snapshot.slow_mover_qty || 0} units idle</div></div></div>
-          <div class="atoms-card"><h3>Top sellers (14d)</h3><div class="atoms-metric">${money(d.performanceflow_snapshot.top_seller_revenue || 0)}<div class="atoms-muted">${d.performanceflow_snapshot.top_seller_units || 0} units · ${d.performanceflow_snapshot.top_seller_count || 0} products</div></div></div>
-          <div class="atoms-card"><h3>Top product</h3><div class="atoms-metric">${escapeHtml(d.performanceflow_snapshot.top_product_name || '—')}<div class="atoms-muted">${d.performanceflow_snapshot.top_product_units || 0} units · ${money(d.performanceflow_snapshot.top_product_revenue || 0)} · profit ${money(d.performanceflow_snapshot.top_product_profit || 0)}</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.customerflow_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Customerflow</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>New customers</h3><div class="atoms-metric">${d.customerflow_snapshot.new_customers_today || 0}<div class="atoms-muted">${d.customerflow_snapshot.new_customers_14d || 0} in 14 days</div></div></div>
-          <div class="atoms-card"><h3>Customers owing</h3><div class="atoms-metric">${d.customerflow_snapshot.owing_customer_count || 0}<div class="atoms-muted">${money(d.customerflow_snapshot.receivable_total || 0)} · avg ${money(d.customerflow_snapshot.avg_balance_owing || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Overdue</h3><div class="atoms-metric">${d.customerflow_snapshot.overdue_count || 0}<div class="atoms-muted">${money(d.customerflow_snapshot.overdue_total || 0)} · ${d.customerflow_snapshot.overdue_share_pct || 0}% of receivables</div></div></div>
-          <div class="atoms-card"><h3>Open & collections</h3><div class="atoms-metric">${d.customerflow_snapshot.open_invoice_count || 0}<div class="atoms-muted">${money(d.customerflow_snapshot.open_invoice_total || 0)} open · ${d.customerflow_snapshot.collection_count_today || 0} collected today (${money(d.customerflow_snapshot.collection_total_today || 0)})</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.intakeflow_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Intakeflow</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Purchases</h3><div class="atoms-metric">${money(d.intakeflow_snapshot.purchase_total || 0)}<div class="atoms-muted">${d.intakeflow_snapshot.purchase_count || 0} today · avg ${money(d.intakeflow_snapshot.avg_purchase_today || 0)} · ${d.intakeflow_snapshot.purchase_count_14d || 0} in 14d</div></div></div>
-          <div class="atoms-card"><h3>IMEIs registered</h3><div class="atoms-metric">${d.intakeflow_snapshot.imei_count || 0}<div class="atoms-muted">${d.intakeflow_snapshot.imei_count_14d || 0} in 14 days</div></div></div>
-          <div class="atoms-card"><h3>Swaps</h3><div class="atoms-metric">${d.intakeflow_snapshot.swap_count || 0}<div class="atoms-muted">${money(d.intakeflow_snapshot.swap_collected || 0)} collected · ${d.intakeflow_snapshot.swap_count_14d || 0} in 14d</div></div></div>
-          <div class="atoms-card"><h3>Supplier flow</h3><div class="atoms-metric">${d.intakeflow_snapshot.intake_count_today || 0}<div class="atoms-muted">${d.intakeflow_snapshot.supplier_payment_count || 0} payments (${money(d.intakeflow_snapshot.supplier_payment_total || 0)}) · ${d.intakeflow_snapshot.supplier_return_count || 0} returns</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.supplierflow_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Supplierflow</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Suppliers owing</h3><div class="atoms-metric">${d.supplierflow_snapshot.owing_supplier_count || 0}<div class="atoms-muted">${money(d.supplierflow_snapshot.payable_total || 0)} · avg ${money(d.supplierflow_snapshot.avg_balance_owing || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Aged payables</h3><div class="atoms-metric">${d.supplierflow_snapshot.aged_payable_count || 0}<div class="atoms-muted">${money(d.supplierflow_snapshot.aged_payable_total || 0)} · ${d.supplierflow_snapshot.aged_share_pct || 0}% of payables</div></div></div>
-          <div class="atoms-card"><h3>Open POs</h3><div class="atoms-metric">${d.supplierflow_snapshot.open_po_count || 0}<div class="atoms-muted">${money(d.supplierflow_snapshot.open_po_total || 0)} · ${d.supplierflow_snapshot.open_payable_count || 0} open payables</div></div></div>
-          <div class="atoms-card"><h3>Payments & returns</h3><div class="atoms-metric">${d.supplierflow_snapshot.supplier_payment_count_today || 0}<div class="atoms-muted">${money(d.supplierflow_snapshot.supplier_payment_total_today || 0)} today · ${d.supplierflow_snapshot.supplier_payment_count_14d || 0} in 14d · ${d.supplierflow_snapshot.supplier_return_count_today || 0} returns</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.inventoryflow_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Inventoryflow</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Available stock</h3><div class="atoms-metric">${d.inventoryflow_snapshot.available_qty || 0}<div class="atoms-muted">${money(d.inventoryflow_snapshot.available_value || 0)} · avg ${money(d.inventoryflow_snapshot.avg_unit_value || 0)}/unit</div></div></div>
-          <div class="atoms-card"><h3>On-hand value</h3><div class="atoms-metric">${money(d.inventoryflow_snapshot.on_hand_value || 0)}<div class="atoms-muted">${d.inventoryflow_snapshot.faulty_qty || 0} faulty · ${d.inventoryflow_snapshot.faulty_share_pct || 0}% of value</div></div></div>
-          <div class="atoms-card"><h3>Low stock</h3><div class="atoms-metric">${d.inventoryflow_snapshot.low_stock_count || 0}<div class="atoms-muted">${d.inventoryflow_snapshot.low_stock_qty || 0} units · lowest ${d.inventoryflow_snapshot.lowest_available || 0}</div></div></div>
-          <div class="atoms-card"><h3>IMEI status</h3><div class="atoms-metric">${d.inventoryflow_snapshot.imei_total || 0}<div class="atoms-muted">${d.inventoryflow_snapshot.imei_available || 0} available · ${d.inventoryflow_snapshot.imei_sold || 0} sold · ${d.inventoryflow_snapshot.imei_registered_today || 0} today</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.staffflow_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Staffflow</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Staff (14d)</h3><div class="atoms-metric">${d.staffflow_snapshot.staff_count || 0}<div class="atoms-muted">${d.staffflow_snapshot.staff_invoices || 0} invoices · ${money(d.staffflow_snapshot.staff_revenue || 0)} · avg ${money(d.staffflow_snapshot.avg_revenue_per_staff || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Top staff</h3><div class="atoms-metric">${escapeHtml(d.staffflow_snapshot.top_staff_name || '—')}<div class="atoms-muted">${money(d.staffflow_snapshot.top_staff_revenue || 0)} · ${d.staffflow_snapshot.top_staff_collection_rate || 0}% collected</div></div></div>
-          <div class="atoms-card"><h3>Branches (14d)</h3><div class="atoms-metric">${d.staffflow_snapshot.branch_count || 0}<div class="atoms-muted">${money(d.staffflow_snapshot.branch_revenue || 0)} · top ${money(d.staffflow_snapshot.top_branch_revenue || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Today</h3><div class="atoms-metric">${d.staffflow_snapshot.sales_today_count || 0}<div class="atoms-muted">${money(d.staffflow_snapshot.sales_today_total || 0)} sales · ${d.staffflow_snapshot.devices_today || 0} devices · ${d.staffflow_snapshot.collection_rate_14d || 0}% collected (14d)</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.branchflow_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Branchflow</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Network (14d)</h3><div class="atoms-metric">${d.branchflow_snapshot.active_branch_count || 0}<div class="atoms-muted">${d.branchflow_snapshot.branch_count || 0} branches · ${d.branchflow_snapshot.invoice_count || 0} invoices · ${money(d.branchflow_snapshot.revenue_14d || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Top branch</h3><div class="atoms-metric">${escapeHtml(d.branchflow_snapshot.top_branch_name || '—')}<div class="atoms-muted">${money(d.branchflow_snapshot.top_branch_revenue || 0)} · profit ${money(d.branchflow_snapshot.top_branch_profit || 0)} · ${d.branchflow_snapshot.top_branch_collection_rate || 0}% collected</div></div></div>
-          <div class="atoms-card"><h3>Collection</h3><div class="atoms-metric">${d.branchflow_snapshot.collection_rate_14d || 0}%<div class="atoms-muted">${money(d.branchflow_snapshot.collected_14d || 0)} collected · avg ${money(d.branchflow_snapshot.avg_revenue_per_branch || 0)}/branch</div></div></div>
-          <div class="atoms-card"><h3>Stock & due</h3><div class="atoms-metric">${d.branchflow_snapshot.stock_qty || 0}<div class="atoms-muted">${money(d.branchflow_snapshot.stock_value || 0)} stock · ${money(d.branchflow_snapshot.due_total || 0)} due (${d.branchflow_snapshot.due_share_pct || 0}%)</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.cashflowflow_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Cashflowflow</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Cash in (14d)</h3><div class="atoms-metric">${money(d.cashflowflow_snapshot.inflows_14d || 0)}<div class="atoms-muted">net ${money(d.cashflowflow_snapshot.net_14d || 0)} · avg ${money(d.cashflowflow_snapshot.avg_daily_inflow_14d || 0)}/day</div></div></div>
-          <div class="atoms-card"><h3>Top method</h3><div class="atoms-metric">${escapeHtml(d.cashflowflow_snapshot.top_payment_method || '—')}<div class="atoms-muted">${money(d.cashflowflow_snapshot.top_payment_collected || 0)} · ${d.cashflowflow_snapshot.payment_method_count || 0} methods</div></div></div>
-          <div class="atoms-card"><h3>Collections</h3><div class="atoms-metric">${d.cashflowflow_snapshot.collection_share_pct || 0}%<div class="atoms-muted">${money(d.cashflowflow_snapshot.collections_14d || 0)} collected · ${d.cashflowflow_snapshot.outflow_share_pct || 0}% outflow share</div></div></div>
-          <div class="atoms-card"><h3>Today</h3><div class="atoms-metric">${money(d.cashflowflow_snapshot.net_today || 0)}<div class="atoms-muted">${money(d.cashflowflow_snapshot.inflows_today || 0)} in · ${money(d.cashflowflow_snapshot.outflows_today || 0)} out · ${money(d.cashflowflow_snapshot.expenses_today || 0)} expenses</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.mixflow_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Mixflow</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Collected (14d)</h3><div class="atoms-metric">${money(d.mixflow_snapshot.payment_collected_14d || 0)}<div class="atoms-muted">${d.mixflow_snapshot.payment_method_count || 0} methods · ${d.mixflow_snapshot.top_payment_share_pct || 0}% top method</div></div></div>
-          <div class="atoms-card"><h3>Retail (14d)</h3><div class="atoms-metric">${money(d.mixflow_snapshot.retail_revenue || 0)}<div class="atoms-muted">${d.mixflow_snapshot.retail_invoices || 0} invoices · ${d.mixflow_snapshot.retail_share_pct || 0}% share</div></div></div>
-          <div class="atoms-card"><h3>Wholesale (14d)</h3><div class="atoms-metric">${money(d.mixflow_snapshot.wholesale_revenue || 0)}<div class="atoms-muted">${d.mixflow_snapshot.wholesale_invoices || 0} invoices · ${d.mixflow_snapshot.wholesale_share_pct || 0}% share</div></div></div>
-          <div class="atoms-card"><h3>Today</h3><div class="atoms-metric">${money(d.mixflow_snapshot.sales_today || 0)}<div class="atoms-muted">${d.mixflow_snapshot.invoices_today || 0} invoices · avg ${money(d.mixflow_snapshot.avg_invoice_value_14d || 0)} (14d)</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.trendflow_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Trendflow</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Sales (14d)</h3><div class="atoms-metric">${money(d.trendflow_snapshot.sales_14d || 0)}<div class="atoms-muted">${d.trendflow_snapshot.active_day_count || 0} active days · avg ${money(d.trendflow_snapshot.avg_daily_net || 0)}/day</div></div></div>
-          <div class="atoms-card"><h3>Collection</h3><div class="atoms-metric">${d.trendflow_snapshot.collection_rate_14d || 0}%<div class="atoms-muted">${money(d.trendflow_snapshot.collected_14d || 0)} collected · avg ${money(d.trendflow_snapshot.avg_daily_collected_14d || 0)}/day</div></div></div>
-          <div class="atoms-card"><h3>Best day</h3><div class="atoms-metric">${money(d.trendflow_snapshot.best_day_net || 0)}<div class="atoms-muted">${escapeHtml(d.trendflow_snapshot.best_day_date || '—')} · ${d.trendflow_snapshot.best_day_share_pct || 0}% of 14d</div></div></div>
-          <div class="atoms-card"><h3>Today</h3><div class="atoms-metric">${money(d.trendflow_snapshot.sales_today || 0)}<div class="atoms-muted">${d.trendflow_snapshot.today_vs_avg_pct || 0}% of avg · ${d.trendflow_snapshot.velocity_change_pct || 0}% 7d velocity</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.productflow_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Productflow</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Top sellers (14d)</h3><div class="atoms-metric">${d.productflow_snapshot.top_seller_count || 0}<div class="atoms-muted">${d.productflow_snapshot.top_seller_units || 0} units · ${money(d.productflow_snapshot.top_seller_revenue || 0)} · ${d.productflow_snapshot.profit_margin_pct || 0}% margin</div></div></div>
-          <div class="atoms-card"><h3>Best product</h3><div class="atoms-metric">${escapeHtml(d.productflow_snapshot.top_product_name || '—')}<div class="atoms-muted">${money(d.productflow_snapshot.top_product_profit || 0)} profit · ${d.productflow_snapshot.top_product_share_pct || 0}% share</div></div></div>
-          <div class="atoms-card"><h3>Unit economics</h3><div class="atoms-metric">${money(d.productflow_snapshot.avg_profit_per_unit || 0)}<div class="atoms-muted">${money(d.productflow_snapshot.avg_revenue_per_unit || 0)}/unit revenue · ${money(d.productflow_snapshot.top_seller_profit || 0)} total profit</div></div></div>
-          <div class="atoms-card"><h3>Slow & low stock</h3><div class="atoms-metric">${d.productflow_snapshot.slow_mover_count || 0}<div class="atoms-muted">${d.productflow_snapshot.slow_mover_qty || 0} slow units (${d.productflow_snapshot.slow_mover_share_pct || 0}%) · ${d.productflow_snapshot.low_stock_count || 0} low-stock alerts</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.ledgerflow_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Ledgerflow</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Receivables</h3><div class="atoms-metric">${money(d.ledgerflow_snapshot.receivable_total || 0)}<div class="atoms-muted">${d.ledgerflow_snapshot.receivable_party_count || 0} customers · avg ${money(d.ledgerflow_snapshot.avg_receivable_per_customer || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Payables</h3><div class="atoms-metric">${money(d.ledgerflow_snapshot.payable_total || 0)}<div class="atoms-muted">${d.ledgerflow_snapshot.payable_party_count || 0} suppliers · avg ${money(d.ledgerflow_snapshot.avg_payable_per_supplier || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Net position</h3><div class="atoms-metric">${money(d.ledgerflow_snapshot.net_position || 0)}<div class="atoms-muted">${d.ledgerflow_snapshot.overdue_count || 0} overdue (${d.ledgerflow_snapshot.overdue_share_pct || 0}%) · ${d.ledgerflow_snapshot.collection_rate_14d || 0}% collected (14d)</div></div></div>
-          <div class="atoms-card"><h3>Cash today</h3><div class="atoms-metric">${money(d.ledgerflow_snapshot.cash_net_today || 0)}<div class="atoms-muted">${money(d.ledgerflow_snapshot.cash_in_today || 0)} in · ${money(d.ledgerflow_snapshot.cash_out_today || 0)} out · ${money(d.ledgerflow_snapshot.collections_today || 0)} collections</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.executiveflow_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Executiveflow</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Sales today</h3><div class="atoms-metric">${money(d.executiveflow_snapshot.sales_today_total || 0)}<div class="atoms-muted">${d.executiveflow_snapshot.sales_today_count || 0} sales · ${d.executiveflow_snapshot.today_vs_avg_14d_pct || 0}% of 14d avg</div></div></div>
-          <div class="atoms-card"><h3>Net position</h3><div class="atoms-metric">${money(d.executiveflow_snapshot.net_position || 0)}<div class="atoms-muted">${money(d.executiveflow_snapshot.receivable_total || 0)} recv · ${money(d.executiveflow_snapshot.payable_total || 0)} pay</div></div></div>
-          <div class="atoms-card"><h3>Cash</h3><div class="atoms-metric">${money(d.executiveflow_snapshot.cash_net_today || 0)}<div class="atoms-muted">${money(d.executiveflow_snapshot.cash_net_14d || 0)} net (14d) · ${d.executiveflow_snapshot.collection_rate_14d || 0}% collected</div></div></div>
-          <div class="atoms-card"><h3>Operations</h3><div class="atoms-metric">${d.executiveflow_snapshot.operations_load || 0}<div class="atoms-muted">${d.executiveflow_snapshot.open_repair_count || 0} repairs · ${d.executiveflow_snapshot.pending_approval_count || 0} approvals · ${d.executiveflow_snapshot.in_transit_count || 0} transit · ${d.executiveflow_snapshot.alert_load || 0} alerts</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.agingflow_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Agingflow</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Receivables aged</h3><div class="atoms-metric">${money(d.agingflow_snapshot.receivable_total || 0)}<div class="atoms-muted">${d.agingflow_snapshot.receivable_line_count || 0} open · ${d.agingflow_snapshot.receivable_aged_share_pct || 0}% 90+</div></div></div>
-          <div class="atoms-card"><h3>Receivable stale</h3><div class="atoms-metric">${money(d.agingflow_snapshot.receivable_stale_total || 0)}<div class="atoms-muted">${d.agingflow_snapshot.receivable_current_share_pct || 0}% current · ${money(d.agingflow_snapshot.receivable_90_plus || 0)} 90+</div></div></div>
-          <div class="atoms-card"><h3>Payables aged</h3><div class="atoms-metric">${money(d.agingflow_snapshot.payable_total || 0)}<div class="atoms-muted">${d.agingflow_snapshot.payable_line_count || 0} open · ${d.agingflow_snapshot.payable_aged_share_pct || 0}% 90+</div></div></div>
-          <div class="atoms-card"><h3>Net aging</h3><div class="atoms-metric">${money(d.agingflow_snapshot.net_aging_position || 0)}<div class="atoms-muted">${d.agingflow_snapshot.stale_share_pct || 0}% stale combined · ${money(d.agingflow_snapshot.payment_collected_14d || 0)} collected (14d)</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.tradeflow_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Tradeflow</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Total owing</h3><div class="atoms-metric">${money(d.tradeflow_snapshot.total_owing_total || 0)}<div class="atoms-muted">${d.tradeflow_snapshot.total_owing_count || 0} invoices · ${d.tradeflow_snapshot.wholesale_owing_share_pct || 0}% wholesale</div></div></div>
-          <div class="atoms-card"><h3>Wholesale owing</h3><div class="atoms-metric">${money(d.tradeflow_snapshot.wholesale_owing_total || 0)}<div class="atoms-muted">${d.tradeflow_snapshot.wholesale_owing_count || 0} invoices · ${money(d.tradeflow_snapshot.wholesale_sales_14d || 0)} sales (14d)</div></div></div>
-          <div class="atoms-card"><h3>Retail owing</h3><div class="atoms-metric">${money(d.tradeflow_snapshot.retail_owing_total || 0)}<div class="atoms-muted">${d.tradeflow_snapshot.retail_owing_count || 0} invoices · ${money(d.tradeflow_snapshot.retail_sales_14d || 0)} sales (14d)</div></div></div>
-          <div class="atoms-card"><h3>Swaps & mix</h3><div class="atoms-metric">${d.tradeflow_snapshot.swap_14d_count || 0}<div class="atoms-muted">${money(d.tradeflow_snapshot.swap_collected_14d || 0)} collected · ${d.tradeflow_snapshot.retail_share_pct || 0}% retail · ${d.tradeflow_snapshot.wholesale_share_pct || 0}% wholesale</div></div></div>
-        </div>
-      </div>` : ''}
-      ${d.inventory_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Inventory at this branch</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Available units</h3><div class="atoms-metric">${d.inventory_snapshot.available_qty || 0}</div></div>
-          <div class="atoms-card"><h3>Available value</h3><div class="atoms-metric">${money(d.inventory_snapshot.available_value || 0)}</div></div>
-          <div class="atoms-card"><h3>Faulty units</h3><div class="atoms-metric">${d.inventory_snapshot.faulty_qty || 0}</div></div>
-          <div class="atoms-card"><h3>On-hand value</h3><div class="atoms-metric">${money(d.inventory_snapshot.on_hand_value || 0)}</div></div>
-          <div class="atoms-card"><h3>Accessory units</h3><div class="atoms-metric">${d.inventory_snapshot.quantity_qty || 0}<div class="atoms-muted">${money(d.inventory_snapshot.quantity_value || 0)}</div></div></div>
-        </div>
-      </div>` : ''}
-      ${(d.imei_status_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>IMEI status at this branch</h3>
-        <table class="atoms-table"><thead><tr><th>Status</th><th>Qty</th></tr></thead><tbody>
-          ${d.imei_status_lines.map((l) => `<tr><td>${badge(l.status)}</td><td>${l.qty}</td></tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.inventory_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Top stock by value</h3>
-        <table class="atoms-table"><thead><tr><th>Product</th><th>Qty</th><th>Valuation</th></tr></thead><tbody>
-          ${d.inventory_lines.map((p) => `<tr>
-            <td>${escapeHtml(p.name || '')}${p.variant_label ? `<br><span class="atoms-muted">${escapeHtml(p.variant_label)}</span>` : ''}</td>
-            <td>${p.total}</td>
-            <td>${money(p.valuation)}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${lowStockCard(d.low_stock || [])}
-      ${(d.trend_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Sales trend (14 days)</h3>
-        ${barChart(d.trend_lines, 'net', 'date')}
-        <table class="atoms-table"><thead><tr><th>Date</th><th>Invoices</th><th>Net</th><th>Collected</th></tr></thead><tbody>
-          ${d.trend_lines.filter((t) => t.invoices || t.net || t.collected).map((t) => `<tr>
-            <td>${escapeHtml(t.date || '')}</td>
-            <td>${t.invoices}</td>
-            <td>${money(t.net)}</td>
-            <td>${money(t.collected)}</td>
-          </tr>`).join('') || '<tr><td colspan="4">No sales in this window.</td></tr>'}
-        </tbody></table>
-      </div>` : ''}
-      ${d.cash_snapshot ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Cash flow (14 days)</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Cash in</h3><div class="atoms-metric">${money(d.cash_snapshot.inflows || 0)}</div></div>
-          <div class="atoms-card"><h3>Expenses</h3><div class="atoms-metric">${money(d.cash_snapshot.expenses || 0)}</div></div>
-          <div class="atoms-card"><h3>Supplier payments</h3><div class="atoms-metric">${money(d.cash_snapshot.supplier_payments || 0)}</div></div>
-          <div class="atoms-card"><h3>Net cash</h3><div class="atoms-metric">${money(d.cash_snapshot.net || 0)}</div></div>
-        </div>
-      </div>` : ''}
-      ${(d.receivable_party_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Top customer balances</h3>
-        <table class="atoms-table"><thead><tr><th>Customer</th><th>Balance</th></tr></thead><tbody>
-          ${d.receivable_party_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-aging-cust" data-id="${l.id}">${escapeHtml(l.name || '')}</button></td>
-            <td>${money(l.balance)}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.payable_party_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Top supplier balances</h3>
-        <table class="atoms-table"><thead><tr><th>Supplier</th><th>Balance</th></tr></thead><tbody>
-          ${d.payable_party_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-dash-payable" data-id="${l.id}">${escapeHtml(l.name || '')}</button></td>
-            <td>${money(l.balance)}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.overdue_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Overdue invoices (${d.debt_days || 7}+ days)</h3>
-        <table class="atoms-table"><thead><tr><th>Customer</th><th>Invoice</th><th>Devices</th><th>Due</th><th>Age</th></tr></thead><tbody>
-          ${d.overdue_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-dash-overdue" data-id="${l.id}">${escapeHtml(l.name || '')}</button></td>
-            <td>${escapeHtml(l.invoice_number || '')}</td>
-            <td>${escapeHtml(l.device_summary || '—')}</td>
-            <td>${money(l.amount)}</td>
-            <td>${l.days}d</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.payable_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Open supplier purchases</h3>
-        <table class="atoms-table"><thead><tr><th>Supplier</th><th>PO invoice</th><th>Variants</th><th>Amount</th><th>Age</th></tr></thead><tbody>
-          ${d.payable_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-dash-payable" data-id="${l.id}">${escapeHtml(l.name || '')}</button></td>
-            <td><button type="button" class="atoms-link js-dash-purchase" data-id="${l.purchase_id}">${escapeHtml(l.invoice_number || '')}</button></td>
-            <td>${escapeHtml(l.variant_summary || '—')}</td>
-            <td>${money(l.amount)}</td>
-            <td>${l.days}d</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.transit_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Stock in transit</h3>
-        <table class="atoms-table"><thead><tr><th>Transfer</th><th>Route</th><th>Devices</th><th>Units</th><th>Age</th></tr></thead><tbody>
-          ${d.transit_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-dash-transit" data-id="${l.id}">${escapeHtml('#' + l.id)}</button></td>
-            <td>${escapeHtml(l.from_branch_name || '')} → ${escapeHtml(l.to_branch_name || '')}</td>
-            <td>${escapeHtml(l.device_summary || '—')}</td>
-            <td>${l.device_count || 0}</td>
-            <td>${l.days}d</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.repair_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Open repairs</h3>
-        <table class="atoms-table"><thead><tr><th>Ticket</th><th>Customer</th><th>Device</th><th>Status</th><th>Engineer</th><th>Age</th></tr></thead><tbody>
-          ${d.repair_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-dash-repair" data-id="${l.id}">${escapeHtml(l.ticket_number || '')}</button></td>
-            <td>${escapeHtml(l.customer_name || 'Walk-in')}</td>
-            <td>${escapeHtml(l.device_summary || '—')}</td>
-            <td>${badge(l.status)}</td>
-            <td>${escapeHtml(l.engineer_name || '—')}</td>
-            <td>${l.days}d</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.stuck_transfer_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Stuck transfers (${d.transfer_hours || 24}h+)</h3>
-        <table class="atoms-table"><thead><tr><th>Transfer</th><th>Status</th><th>Route</th><th>Devices</th><th>Hours</th></tr></thead><tbody>
-          ${d.stuck_transfer_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-dash-transit" data-id="${l.id}">${escapeHtml('#' + l.id)}</button></td>
-            <td>${badge(l.status)}</td>
-            <td>${escapeHtml(l.from_branch_name || '')} → ${escapeHtml(l.to_branch_name || '')}</td>
-            <td>${escapeHtml(l.device_summary || '—')}</td>
-            <td>${l.hours}h</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(can('atoms_approve') || can('atoms_approve_adjustments')) && (d.approval_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Pending approvals</h3>
-        <table class="atoms-table"><thead><tr><th>#</th><th>Request</th><th>Summary</th><th>Who</th><th>When</th></tr></thead><tbody>
-          ${d.approval_lines.map((a) => `<tr>
-            <td><button type="button" class="atoms-link js-dash-approval" data-id="${a.id}">${a.id}</button></td>
-            <td>${escapeHtml(a.type_label || a.type)}</td>
-            <td>${escapeHtml(a.summary || '')}</td>
-            <td>${escapeHtml(a.requester_name || '—')}</td>
-            <td>${escapeHtml(a.created_at || '')}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.stuck_repair_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Stuck repairs (${d.repair_days || 3}d+)</h3>
-        <table class="atoms-table"><thead><tr><th>Ticket</th><th>Customer</th><th>Device</th><th>Status</th><th>Age</th></tr></thead><tbody>
-          ${d.stuck_repair_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-dash-repair" data-id="${l.id}">${escapeHtml(l.ticket_number || '')}</button></td>
-            <td>${escapeHtml(l.customer_name || 'Walk-in')}</td>
-            <td>${escapeHtml(l.device_summary || '—')}</td>
-            <td>${badge(l.status)}</td>
-            <td>${l.days}d</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.faulty_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Faulty devices waiting</h3>
-        <table class="atoms-table"><thead><tr><th>IMEI</th><th>Device</th><th>Age</th></tr></thead><tbody>
-          ${d.faulty_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-open-imei" data-imei="${escapeHtml(l.imei || '')}">${escapeHtml(l.imei || '')}</button></td>
-            <td>${escapeHtml(l.device_summary || '—')}</td>
-            <td>${l.days}d</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.stock_count_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Open stock counts</h3>
-        <table class="atoms-table"><thead><tr><th>Count</th><th>Status</th><th>Missing</th><th>Extra</th><th>Devices</th><th>Age</th></tr></thead><tbody>
-          ${d.stock_count_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-dash-count" data-id="${l.id}">${escapeHtml('#' + l.id)}</button></td>
-            <td>${badge(l.status)}</td>
-            <td>${l.missing_qty || 0}</td>
-            <td>${l.extra_qty || 0}</td>
-            <td>${escapeHtml(l.missing_summary || '—')}</td>
-            <td>${l.days}d</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.stuck_faulty_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Stuck faulty devices (${d.return_days || 2}d+)</h3>
-        <table class="atoms-table"><thead><tr><th>IMEI</th><th>Device</th><th>Age</th></tr></thead><tbody>
-          ${d.stuck_faulty_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-open-imei" data-imei="${escapeHtml(l.imei || '')}">${escapeHtml(l.imei || '')}</button></td>
-            <td>${escapeHtml(l.device_summary || '—')}</td>
-            <td>${l.days}d</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.return_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Recent returns (14 days)</h3>
-        <table class="atoms-table"><thead><tr><th>Return</th><th>Invoice</th><th>Customer</th><th>Device</th><th>Type</th><th>Refund</th></tr></thead><tbody>
-          ${d.return_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-return-open" data-id="${l.id}">${escapeHtml('#' + l.id)}</button></td>
-            <td>${escapeHtml(l.invoice_number || '')}</td>
-            <td>${escapeHtml(l.customer_name || 'Walk-in')}</td>
-            <td>${escapeHtml(l.device_summary || '—')}</td>
-            <td>${badge(l.return_type)} · ${badge(l.resolution)}</td>
-            <td>${money(l.refund_amount)}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.wholesale_receivable_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Open wholesale invoices</h3>
-        <table class="atoms-table"><thead><tr><th>Customer</th><th>Invoice</th><th>Devices</th><th>Due</th><th>Age</th></tr></thead><tbody>
-          ${d.wholesale_receivable_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-dash-overdue" data-id="${l.id}">${escapeHtml(l.name || '')}</button></td>
-            <td>${escapeHtml(l.invoice_number || '')}</td>
-            <td>${escapeHtml(l.device_summary || '—')}</td>
-            <td>${money(l.amount)}</td>
-            <td>${l.days}d</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.retail_receivable_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Open retail invoices</h3>
-        <table class="atoms-table"><thead><tr><th>Customer</th><th>Invoice</th><th>Devices</th><th>Due</th><th>Age</th></tr></thead><tbody>
-          ${d.retail_receivable_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-dash-overdue" data-id="${l.id}">${escapeHtml(l.name || '')}</button></td>
-            <td>${escapeHtml(l.invoice_number || '')}</td>
-            <td>${escapeHtml(l.device_summary || '—')}</td>
-            <td>${money(l.amount)}</td>
-            <td>${l.days}d</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.expense_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Pending expenses</h3>
-        <table class="atoms-table"><thead><tr><th>Expense</th><th>Category</th><th>Vendor</th><th>Amount</th><th>Age</th></tr></thead><tbody>
-          ${d.expense_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-exp-open" data-id="${l.id}">${escapeHtml('#' + l.id)}</button></td>
-            <td>${badge(l.category)}</td>
-            <td>${escapeHtml(l.vendor || '—')}</td>
-            <td>${money(l.amount)}</td>
-            <td>${l.days}d</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.swap_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Recent swaps (14 days)</h3>
-        <table class="atoms-table"><thead><tr><th>Swap</th><th>Customer</th><th>Devices</th><th>Difference</th></tr></thead><tbody>
-          ${d.swap_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-swap-open" data-id="${l.id}">${escapeHtml(l.invoice_number || ('#' + l.id))}</button></td>
-            <td>${escapeHtml(l.customer_name || 'Walk-in')}</td>
-            <td>${escapeHtml(l.device_summary || '—')}</td>
-            <td>${money(l.difference)}<br><span class="atoms-muted">${escapeHtml(l.summary || '')}</span></td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.sale_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Recent sales (14 days)</h3>
-        <table class="atoms-table"><thead><tr><th>Invoice</th><th>Type</th><th>Customer</th><th>Devices</th><th>Total</th><th>Due</th></tr></thead><tbody>
-          ${d.sale_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-invoice" data-inv="${escapeHtml(l.invoice_number || '')}">${escapeHtml(l.invoice_number || '')}</button></td>
-            <td>${escapeHtml(l.sale_type_label || l.sale_type || 'Retail')}</td>
-            <td>${l.customer_id ? `<button type="button" class="atoms-link js-dash-overdue" data-id="${l.customer_id}">${escapeHtml(l.customer_name || '')}</button>` : escapeHtml(l.customer_name || 'Walk-in')}</td>
-            <td>${escapeHtml(l.device_summary || '—')}</td>
-            <td>${money(l.total)}</td>
-            <td>${money(l.due_amount)}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.payment_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Recent collections (14 days)</h3>
-        <table class="atoms-table"><thead><tr><th>Customer</th><th>Invoice</th><th>Amount</th><th>Method</th><th>Status</th></tr></thead><tbody>
-          ${d.payment_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-dash-overdue" data-id="${l.customer_id}">${escapeHtml(l.customer_name || '')}</button></td>
-            <td>${l.invoice_number ? `<button type="button" class="atoms-link js-invoice" data-inv="${escapeHtml(l.invoice_number)}">${escapeHtml(l.invoice_number)}</button>` : '—'}</td>
-            <td>${money(l.amount)}</td>
-            <td>${escapeHtml(l.method || '')}</td>
-            <td>${badge(l.status)}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.supplier_payment_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Recent supplier payments (14 days)</h3>
-        <table class="atoms-table"><thead><tr><th>Supplier</th><th>PO invoice</th><th>Amount</th><th>Method</th></tr></thead><tbody>
-          ${d.supplier_payment_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-dash-payable" data-id="${l.supplier_id}">${escapeHtml(l.supplier_name || '')}</button></td>
-            <td>${l.purchase_id ? `<button type="button" class="atoms-link js-dash-purchase" data-id="${l.purchase_id}">${escapeHtml(l.purchase_invoice || '')}</button>` : escapeHtml(l.purchase_invoice || '—')}</td>
-            <td>${money(l.amount)}</td>
-            <td>${escapeHtml(l.method || '')}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.open_purchase_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Open purchases</h3>
-        <table class="atoms-table"><thead><tr><th>PO</th><th>Supplier</th><th>Items</th><th>Total</th><th>Progress</th><th>Status</th></tr></thead><tbody>
-          ${d.open_purchase_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-dash-purchase" data-id="${l.id}">${escapeHtml(l.invoice_number || ('#' + l.id))}</button></td>
-            <td><button type="button" class="atoms-link js-dash-payable" data-id="${l.supplier_id}">${escapeHtml(l.supplier_name || '')}</button></td>
-            <td>${escapeHtml(l.item_summary || '—')}</td>
-            <td>${money(l.total)}</td>
-            <td>${l.received}/${l.units}</td>
-            <td>${badge(l.status)}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.purchase_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Recent purchases (14 days)</h3>
-        <table class="atoms-table"><thead><tr><th>PO</th><th>Supplier</th><th>Items</th><th>Total</th><th>Units</th></tr></thead><tbody>
-          ${d.purchase_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-dash-purchase" data-id="${l.id}">${escapeHtml(l.invoice_number || ('#' + l.id))}</button></td>
-            <td><button type="button" class="atoms-link js-dash-payable" data-id="${l.supplier_id}">${escapeHtml(l.supplier_name || '')}</button></td>
-            <td>${escapeHtml(l.item_summary || '—')}</td>
-            <td>${money(l.total)}</td>
-            <td>${l.units}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.supplier_return_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Recent supplier returns (14 days)</h3>
-        <table class="atoms-table"><thead><tr><th>Supplier</th><th>Device</th><th>Credit</th><th>Age</th></tr></thead><tbody>
-          ${d.supplier_return_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-dash-payable" data-id="${l.supplier_id}">${escapeHtml(l.supplier_name || '')}</button></td>
-            <td>${escapeHtml(l.device_summary || '—')}</td>
-            <td>${money(l.amount)}</td>
-            <td>${l.days}d</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.reversal_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Recent payment reversals (14 days)</h3>
-        <table class="atoms-table"><thead><tr><th>Customer</th><th>Invoice</th><th>Amount</th><th>Reason</th></tr></thead><tbody>
-          ${d.reversal_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-dash-overdue" data-id="${l.customer_id}">${escapeHtml(l.customer_name || '')}</button></td>
-            <td>${l.invoice_number ? `<button type="button" class="atoms-link js-invoice" data-inv="${escapeHtml(l.invoice_number)}">${escapeHtml(l.invoice_number)}</button>` : '—'}</td>
-            <td>${money(l.amount)}</td>
-            <td>${escapeHtml(l.notes || '—')}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.voided_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Recent voided sales (14 days)</h3>
-        <table class="atoms-table"><thead><tr><th>Invoice</th><th>Customer</th><th>Devices</th><th>Total</th><th>Reason</th></tr></thead><tbody>
-          ${d.voided_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-invoice" data-inv="${escapeHtml(l.invoice_number || '')}">${escapeHtml(l.invoice_number || '')}</button></td>
-            <td>${l.customer_id ? `<button type="button" class="atoms-link js-dash-overdue" data-id="${l.customer_id}">${escapeHtml(l.customer_name || '')}</button>` : escapeHtml(l.customer_name || 'Walk-in')}</td>
-            <td>${escapeHtml(l.device_summary || '—')}</td>
-            <td>${money(l.total)}</td>
-            <td>${escapeHtml(l.void_reason || '—')}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.posted_expense_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Recent posted expenses (14 days)</h3>
-        <table class="atoms-table"><thead><tr><th>Expense</th><th>Category</th><th>Vendor</th><th>Amount</th></tr></thead><tbody>
-          ${d.posted_expense_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-exp-open" data-id="${l.id}">${escapeHtml('#' + l.id)}</button></td>
-            <td>${badge(l.category)}</td>
-            <td>${escapeHtml(l.vendor || '—')}</td>
-            <td>${money(l.amount)}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.audit_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Recent audit activity (14 days)</h3>
-        <table class="atoms-table"><thead><tr><th>When</th><th>Action</th><th>User</th><th>Summary</th></tr></thead><tbody>
-          ${d.audit_lines.map((a) => `<tr>
-            <td>${escapeHtml(a.created_at || '')}</td>
-            <td>${escapeHtml(a.action_label || a.action || '')}</td>
-            <td>${escapeHtml(a.user_name || '')}</td>
-            <td>${escapeHtml(a.summary || '')}${a.link ? ` <button type="button" class="atoms-link js-audit-open" data-link="${escapeHtml(JSON.stringify(a.link))}">Open</button>` : ''}</td>
-          </tr>`).join('')}
-        </tbody></table>
-        <p style="margin-top:8px"><a href="#/audit">Full audit trail</a></p>
-      </div>` : ''}
-      ${(d.recent_transfer_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Recent transfers (14 days)</h3>
-        <table class="atoms-table"><thead><tr><th>Transfer</th><th>Route</th><th>Status</th><th>Devices</th></tr></thead><tbody>
-          ${d.recent_transfer_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-dash-transit" data-id="${l.id}">${escapeHtml('#' + l.id)}</button></td>
-            <td>${escapeHtml(l.from_branch_name || '')} → ${escapeHtml(l.to_branch_name || '')}</td>
-            <td>${badge(l.status)}</td>
-            <td>${escapeHtml(l.device_summary || '—')}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.posted_stock_count_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Recent stock counts (14 days)</h3>
-        <table class="atoms-table"><thead><tr><th>Count</th><th>Branch</th><th>Expected</th><th>Missing</th><th>Extra</th></tr></thead><tbody>
-          ${d.posted_stock_count_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-dash-count" data-id="${l.id}">${escapeHtml('#' + l.id)}</button></td>
-            <td>${escapeHtml(l.branch_name || '')}</td>
-            <td>${l.expected_qty || 0}</td>
-            <td>${l.missing_qty || 0}</td>
-            <td>${l.extra_qty || 0}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.completed_repair_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Recent completed repairs (14 days)</h3>
-        <table class="atoms-table"><thead><tr><th>Ticket</th><th>Customer</th><th>Device</th><th>Engineer</th><th>Outcome</th></tr></thead><tbody>
-          ${d.completed_repair_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-dash-repair" data-id="${l.id}">${escapeHtml(l.ticket_number || '')}</button></td>
-            <td>${escapeHtml(l.customer_name || 'Walk-in')}</td>
-            <td>${escapeHtml(l.device_summary || '—')}</td>
-            <td>${escapeHtml(l.engineer_name || '—')}</td>
-            <td>${badge(l.status)}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.recent_approval_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Recent approval decisions (14 days)</h3>
-        <table class="atoms-table"><thead><tr><th>#</th><th>Request</th><th>Summary</th><th>Decision</th><th>Reviewer</th></tr></thead><tbody>
-          ${d.recent_approval_lines.map((a) => `<tr>
-            <td><button type="button" class="atoms-link js-dash-approval" data-id="${a.id}">${a.id}</button></td>
-            <td>${escapeHtml(a.type_label || a.type || '')}</td>
-            <td>${escapeHtml(a.summary || '')}</td>
-            <td>${badge(a.status)}</td>
-            <td>${escapeHtml(a.reviewer_name || '—')}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.recent_customer_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>New customers (14 days)</h3>
-        <table class="atoms-table"><thead><tr><th>Customer</th><th>Phone</th><th>Balance</th><th>Age</th></tr></thead><tbody>
-          ${d.recent_customer_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-dash-overdue" data-id="${l.id}">${escapeHtml(l.name || '')}</button></td>
-            <td>${escapeHtml(l.phone || '')}</td>
-            <td>${money(l.balance)}</td>
-            <td>${l.days}d</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.recent_imei_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Recent IMEI intake (14 days)</h3>
-        <table class="atoms-table"><thead><tr><th>IMEI</th><th>Device</th><th>Status</th><th>Source</th></tr></thead><tbody>
-          ${d.recent_imei_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-open-imei" data-imei="${escapeHtml(l.imei || '')}">${escapeHtml(l.imei || '')}</button></td>
-            <td>${escapeHtml(l.device_summary || '—')}</td>
-            <td>${badge(l.status)}</td>
-            <td>${escapeHtml(l.source_type || '')}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.staff_device_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Staff device sales (14 days)</h3>
-        <table class="atoms-table"><thead><tr><th>Sold by</th><th>Invoice</th><th>Device</th><th>Price</th></tr></thead><tbody>
-          ${d.staff_device_lines.map((l) => `<tr>
-            <td>${escapeHtml(l.salesperson_name || '—')}</td>
-            <td>${l.invoice_number ? `<button type="button" class="atoms-link js-invoice" data-inv="${escapeHtml(l.invoice_number)}">${escapeHtml(l.invoice_number)}</button>` : '—'}</td>
-            <td>${escapeHtml(l.imei || '')}${l.variant_label ? `<br><span class="atoms-muted">${escapeHtml(l.product_name || '')} · ${escapeHtml(l.variant_label)}</span>` : ''}</td>
-            <td>${money(l.selling_price)}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.notify_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Recent alerts${Number(d.notify_unread || 0) > 0 ? ` · ${d.notify_unread} unread` : ''}</h3>
-        <table class="atoms-table"><thead><tr><th>Alert</th><th>Detail</th><th>When</th><th></th></tr></thead><tbody>
-          ${d.notify_lines.map((n) => `<tr class="${Number(n.is_read) ? '' : 'is-unread'}">
-            <td>${escapeHtml(n.title || '')}</td>
-            <td>${escapeHtml(n.body || '')}</td>
-            <td>${escapeHtml(n.created_at || '')}</td>
-            <td>${n.link ? `<button type="button" class="atoms-link js-notify-open" data-link="${escapeHtml(JSON.stringify(n.link))}">Open</button>` : ''}</td>
-          </tr>`).join('')}
-        </tbody></table>
-        <p style="margin-top:8px"><a href="#/notifications">All alerts</a></p>
-      </div>` : ''}
-      ${(d.top_product_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Top products (14 days)</h3>
-        <table class="atoms-table"><thead><tr><th>Product</th><th>Units</th><th>Profit</th></tr></thead><tbody>
-          ${d.top_product_lines.map((p) => `<tr>
-            <td>${escapeHtml(p.name || '')}${p.variant_label ? `<br><span class="atoms-muted">${escapeHtml(p.variant_label)}</span>` : ''}</td>
-            <td>${p.units}</td>
-            <td>${money(p.profit)}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.aging_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Receivable aging</h3>
-        <div class="atoms-grid" style="margin-bottom:12px">
-          <div class="atoms-card"><h3>0–30 days</h3><div class="atoms-metric">${money((d.aging_buckets || {})['0-30'] || 0)}</div></div>
-          <div class="atoms-card"><h3>31–60 days</h3><div class="atoms-metric">${money((d.aging_buckets || {})['31-60'] || 0)}</div></div>
-          <div class="atoms-card"><h3>61–90 days</h3><div class="atoms-metric">${money((d.aging_buckets || {})['61-90'] || 0)}</div></div>
-          <div class="atoms-card"><h3>90+ days</h3><div class="atoms-metric">${money((d.aging_buckets || {})['90+'] || 0)}</div></div>
-        </div>
-        <table class="atoms-table"><thead><tr><th>Customer</th><th>Invoice</th><th>Devices</th><th>Due</th><th>Days</th></tr></thead><tbody>
-          ${d.aging_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-aging-cust" data-id="${l.id}">${escapeHtml(l.name || '')}</button></td>
-            <td>${l.invoice_number ? `<button type="button" class="atoms-link js-invoice" data-inv="${escapeHtml(l.invoice_number)}">${escapeHtml(l.invoice_number)}</button>` : '—'}</td>
-            <td>${escapeHtml(l.device_summary || '—')}</td>
-            <td>${money(l.amount)}</td>
-            <td>${l.days}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.payable_aging_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Payable aging</h3>
-        <div class="atoms-grid" style="margin-bottom:12px">
-          <div class="atoms-card"><h3>0–30 days</h3><div class="atoms-metric">${money((d.payable_aging_buckets || {})['0-30'] || 0)}</div></div>
-          <div class="atoms-card"><h3>31–60 days</h3><div class="atoms-metric">${money((d.payable_aging_buckets || {})['31-60'] || 0)}</div></div>
-          <div class="atoms-card"><h3>61–90 days</h3><div class="atoms-metric">${money((d.payable_aging_buckets || {})['61-90'] || 0)}</div></div>
-          <div class="atoms-card"><h3>90+ days</h3><div class="atoms-metric">${money((d.payable_aging_buckets || {})['90+'] || 0)}</div></div>
-        </div>
-        <table class="atoms-table"><thead><tr><th>Supplier</th><th>PO invoice</th><th>Variants</th><th>Amount</th><th>Days</th></tr></thead><tbody>
-          ${d.payable_aging_lines.map((l) => `<tr>
-            <td><button type="button" class="atoms-link js-dash-payable" data-id="${l.id}">${escapeHtml(l.name || '')}</button></td>
-            <td>${l.purchase_id ? `<button type="button" class="atoms-link js-dash-purchase" data-id="${l.purchase_id}">${escapeHtml(l.invoice_number || '')}</button>` : escapeHtml(l.invoice_number || '—')}</td>
-            <td>${escapeHtml(l.variant_summary || '—')}</td>
-            <td>${money(l.amount)}</td>
-            <td>${l.days}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.movement_events || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Stock movement (14 days)</h3>
-        <table class="atoms-table"><thead><tr><th>Event</th><th>Qty</th></tr></thead><tbody>
-          ${d.movement_events.map((e) => `<tr><td>${escapeHtml(labelEvent(e.event_type))}</td><td>${e.qty}</td></tr>`).join('')}
-        </tbody></table>
-        ${(d.movement_lines || []).length ? `<h3 style="margin-top:16px">By product</h3>
-        <table class="atoms-table"><thead><tr><th>Event</th><th>Product</th><th>Variant</th><th>Qty</th></tr></thead><tbody>
-          ${d.movement_lines.map((e) => `<tr>
-            <td>${escapeHtml(labelEvent(e.event_type))}</td>
-            <td>${escapeHtml(e.product_name || '')}</td>
-            <td>${escapeHtml(e.variant_label || '—')}</td>
-            <td>${e.qty}</td>
-          </tr>`).join('')}
-        </tbody></table>` : ''}
-      </div>` : ''}
-      ${(d.sale_type_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Retail vs wholesale (14 days)</h3>
-        <table class="atoms-table"><thead><tr><th>Type</th><th>Invoices</th><th>Net</th></tr></thead><tbody>
-          ${d.sale_type_lines.map((t) => `<tr>
-            <td>${escapeHtml(t.label || t.type || '')}</td>
-            <td>${t.invoices}</td>
-            <td>${money(t.net)}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.payment_mix_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Payment mix (14 days)</h3>
-        <table class="atoms-table"><thead><tr><th>Method</th><th>Invoices</th><th>Collected</th></tr></thead><tbody>
-          ${d.payment_mix_lines.map((m) => `<tr>
-            <td>${escapeHtml(m.method || '')}</td>
-            <td>${m.invoices}</td>
-            <td>${money(m.collected)}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.branch_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Branch performance (14 days)</h3>
-        <table class="atoms-table"><thead><tr><th>Branch</th><th>Invoices</th><th>Revenue</th><th>Profit</th><th>Collection</th></tr></thead><tbody>
-          ${d.branch_lines.map((b) => `<tr>
-            <td>${escapeHtml(b.name || '')}</td>
-            <td>${b.invoices}</td>
-            <td>${money(b.revenue)}</td>
-            <td>${money(b.profit)}</td>
-            <td>${Number(b.collection_rate || 0)}%</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.staff_sales_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Staff sales (14 days)</h3>
-        <table class="atoms-table"><thead><tr><th>Sold by</th><th>Invoices</th><th>Revenue</th><th>Profit</th><th>Collection</th></tr></thead><tbody>
-          ${d.staff_sales_lines.map((s) => `<tr>
-            <td>${escapeHtml(s.name || '')}</td>
-            <td>${s.invoices}</td>
-            <td>${money(s.revenue)}</td>
-            <td>${money(s.profit)}</td>
-            <td>${Number(s.collection_rate || 0)}%</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${(d.slow_lines || []).length ? `<div class="atoms-card" style="margin-top:16px">
-        <h3>Slow movers (21d+ on shelf)</h3>
-        <table class="atoms-table"><thead><tr><th>Product</th><th>Qty</th><th>Oldest</th></tr></thead><tbody>
-          ${d.slow_lines.map((s) => `<tr>
-            <td>${escapeHtml(s.name || '')}${s.variant_label ? `<br><span class="atoms-muted">${escapeHtml(s.variant_label)}</span>` : ''}</td>
-            <td>${s.qty}</td>
-            <td>${escapeHtml(s.oldest || '')}</td>
-          </tr>`).join('')}
-        </tbody></table>
-      </div>` : ''}
-      ${can('atoms_view_reports') ? '<p style="margin-top:12px"><a href="#/analytics">View trends & charts</a> · <a href="#/reports">Download reports</a></p>' : ''}
-      ${d.receivables_snapshot ? '</div></div>' : ''}
-      </div>
-      ${tableCard('Stock by branch', inventoryTable(d.inventory?.products || []), 'Available units across your network')}`;
+      <div class="atoms-home-desk">
+        ${dashboardPulseKpis(d, persona)}
+        ${dashboardUserCustomizeBar(persona)}
+        ${quickActions ? `<div class="atoms-quick-actions">${quickActions}</div>` : ''}
+        ${dashboardWorkQueuesPanel(d)}
+        ${dashboardInsightsTeaser(d)}
+      </div>`;
   }
 
   function queueCard(q) {
@@ -5891,9 +4875,13 @@
         group: 'Money & reports',
         trail: 'Trends & charts',
         title: 'Trends & performance',
-        subtitle: 'Charts and summaries for the last 14 days — sales, collections, stock, and team performance.',
+        subtitle: 'Full 14-day business desk — snapshots, charts, receivables, payables, inventory, and team performance (moved from the home overview).',
         actions: '<a class="atoms-back-btn" href="#/dashboard"><span class="material-symbols-outlined">arrow_back</span><span>Back to overview</span></a><a class="atoms-btn ghost sm" href="#/reports"><span class="material-symbols-outlined">summarize</span> Open reports</a>',
       })}
+      <div class="atoms-flash info atoms-analytics-intro">
+        <span class="material-symbols-outlined" aria-hidden="true">info</span>
+        <span>Detailed metrics and historical tables live here. The <a href="#/dashboard">store overview</a> shows only today’s pulse and work queues.</span>
+      </div>
       ${data.today_cash_snapshot ? `<div class="atoms-card" style="margin-bottom:16px">
         <h3>Cash today</h3>
         <div class="atoms-grid">
@@ -7700,6 +6688,7 @@
           </div>
         </form>
       </div>
+      ${can('atoms_manage_settings') ? homeKpiSettingsBlock(ops) : ''}
       ${can('atoms_manage_settings') && types.length ? `<div class="atoms-card" style="margin-bottom:16px">
         <div class="atoms-pos-section-title">
           <span class="material-symbols-outlined" style="color:var(--atoms-primary);">upload_file</span>
@@ -7929,6 +6918,55 @@
       await api(`notifications/${btn.dataset.id}/read`, { method: 'POST', body: {} });
       render();
     }));
+    document.querySelectorAll('.js-home-queue-tab').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const queue = btn.dataset.queue || 'sales';
+        setHomeQueueTabPref(queue);
+        document.querySelectorAll('.js-home-queue-tab').forEach((tab) => {
+          const active = tab === btn;
+          tab.classList.toggle('is-active', active);
+          tab.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+        document.querySelectorAll('.atoms-home-queue-pane').forEach((pane) => {
+          pane.classList.toggle('hidden', pane.dataset.queuePane !== queue);
+        });
+      });
+    });
+
+    initHomeKpiSortable(document);
+
+    const customizeToggle = document.querySelector('.js-home-customize-toggle');
+    if (customizeToggle) {
+      customizeToggle.addEventListener('click', () => {
+        const panel = document.getElementById('atoms-home-customize-panel');
+        if (!panel) return;
+        const hidden = panel.classList.toggle('hidden');
+        customizeToggle.setAttribute('aria-expanded', hidden ? 'false' : 'true');
+        if (!hidden) initHomeKpiSortable(panel);
+      });
+    }
+    document.querySelectorAll('.js-home-user-save').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const home = await api('home-layout', {
+          method: 'POST',
+          body: {
+            kpis: readUserHomeKpiFromDom(),
+            show_trends: !!document.getElementById('home-user-show-trends')?.checked,
+          },
+        });
+        state.bootstrap.user = { ...(state.bootstrap.user || {}), home };
+        setFlash('Your overview layout was saved.');
+        render();
+      });
+    });
+    document.querySelectorAll('.js-home-user-reset').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const home = await api('home-layout/reset', { method: 'POST', body: {} });
+        state.bootstrap.user = { ...(state.bootstrap.user || {}), home };
+        setFlash('Overview layout reset to store default.');
+        render();
+      });
+    });
     document.querySelectorAll('.js-notify-filter').forEach((btn) => {
       btn.addEventListener('click', () => {
         const filter = btn.dataset.filter || 'all';
@@ -7953,6 +6991,19 @@
       setFlash('WhatsApp row marked sent. Nothing was deleted.');
       render();
     }));
+
+    onSubmit('home-layout-form', async () => {
+      const saved = await api('settings', {
+        method: 'POST',
+        body: {
+          home_kpis: readHomeKpiSettingsFromDom(),
+          home_show_trends: document.getElementById('home-show-trends').checked,
+        },
+      });
+      state.bootstrap.settings = { ...(state.bootstrap.settings || {}), ...saved };
+      setFlash('Home overview layout saved.');
+      render();
+    });
 
     onSubmit('ops-form', async () => {
       const saved = await api('settings', {

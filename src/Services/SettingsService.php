@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Atoms\Services;
 
 use Atoms\Domain\AutomationRules;
+use Atoms\Domain\HomeDashboardPolicy;
 use Atoms\Domain\SecretBox;
 use Atoms\Domain\WarrantyPolicy;
 
@@ -47,6 +48,8 @@ final class SettingsService
             'warranty_days'       => 365,
             'google_maps_key'     => '',
             'pwa_url'             => home_url('/atoms-app/'),
+            'home_kpis'           => (new HomeDashboardPolicy())->defaults(),
+            'home_show_trends'    => true,
         ], $saved);
         $merged['last_run'] = get_option(AutomationService::LAST_OPTION, null);
         $merged['pwa_url']  = home_url('/atoms-app/');
@@ -65,6 +68,7 @@ final class SettingsService
         $set = trim((string) ($row['whatsapp_token'] ?? '')) !== '';
         unset($row['whatsapp_token']);
         $row['whatsapp_token_set'] = $set;
+        $row['home_dashboard']     = (new HomeDashboardPolicy())->manifest(is_array($row['home_kpis'] ?? null) ? $row['home_kpis'] : null);
 
         return $row;
     }
@@ -78,6 +82,7 @@ final class SettingsService
         $current = $this->get();
         $rules   = new AutomationRules();
         $cover   = new WarrantyPolicy();
+        $home    = new HomeDashboardPolicy();
         $next    = [
             'company'             => sanitize_text_field((string) ($data['company'] ?? $current['company'])),
             'wordmark'            => sanitize_text_field((string) ($data['wordmark'] ?? $current['wordmark'])),
@@ -97,6 +102,8 @@ final class SettingsService
             'warranty_days'       => $cover->clampDays((int) ($data['warranty_days'] ?? $current['warranty_days'] ?? 365)),
             'google_maps_key'     => sanitize_text_field((string) ($data['google_maps_key'] ?? $current['google_maps_key'] ?? '')),
             'pwa_url'             => home_url('/atoms-app/'),
+            'home_kpis'           => $home->normalize(is_array($data['home_kpis'] ?? null) ? $data['home_kpis'] : ($current['home_kpis'] ?? null)),
+            'home_show_trends'    => !isset($data['home_show_trends']) || !empty($data['home_show_trends']),
         ];
         update_option(self::OPTION, $next);
         update_option('atoms_company_name', $next['company']);

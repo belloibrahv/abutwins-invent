@@ -2596,3 +2596,245 @@ a.atoms-back-btn {
     grid-template-columns: 1fr;
   }
 }
+
+/* ==========================================================================
+   HOME OVERVIEW — slim role-based dashboard
+   ========================================================================== */
+.atoms-home-desk {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.atoms-home-kpis {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.atoms-home-queues .atoms-panel-head {
+  align-items: flex-start;
+}
+
+.atoms-home-queue-tabs {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.atoms-home-queue-body {
+  padding-top: 8px !important;
+}
+
+.atoms-home-queue-pane .atoms-table {
+  margin-bottom: 0;
+}
+
+.atoms-home-queue-sub {
+  margin: 16px 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--atoms-text-muted);
+}
+
+.atoms-home-queue-sub:first-child {
+  margin-top: 0;
+}
+
+.atoms-home-queue-foot {
+  margin: 12px 0 0;
+  font-size: 12.5px;
+}
+
+.atoms-home-queue-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px 16px;
+  text-align: center;
+}
+
+.atoms-home-queue-empty .material-symbols-outlined {
+  font-size: 36px;
+  color: var(--atoms-text-muted);
+  opacity: 0.5;
+}
+
+.atoms-home-queue-empty p {
+  margin: 0;
+  color: var(--atoms-text-secondary);
+  font-size: 14px;
+}
+
+.atoms-home-insights .atoms-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.atoms-home-cash-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--atoms-surface-subtle);
+  border: 1px solid var(--atoms-line-subtle);
+  border-radius: var(--atoms-r-lg);
+}
+
+.atoms-home-cash-strip > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.atoms-home-cash-strip strong {
+  font-size: 15px;
+  color: var(--atoms-text-primary);
+}
+
+.atoms-home-chart {
+  min-height: 180px;
+}
+
+.atoms-analytics-intro {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  background: var(--atoms-primary-subtle);
+  border: 1px solid var(--atoms-primary-border);
+  border-radius: var(--atoms-r-lg);
+  color: var(--atoms-primary-text);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.atoms-analytics-intro .material-symbols-outlined {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.atoms-analytics-intro a {
+  color: inherit;
+  font-weight: 700;
+}
+
+@media (max-width: 1100px) {
+  .atoms-home-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .atoms-home-queues .atoms-panel-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .atoms-home-queue-tabs {
+    margin-left: 0;
+    width: 100%;
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 720px) {
+  .atoms-home-kpis {
+    grid-template-columns: 1fr;
+  }
+
+  .atoms-home-cash-strip {
+    grid-template-columns: 1fr;
+  }
+}
+
+.atoms-home-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.atoms-home-kpi-persona h4 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--atoms-text-primary);
+}
+
+.atoms-home-kpi-checks {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+
+.atoms-home-kpi-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--atoms-text-secondary);
+  cursor: pointer;
+}
+
+.atoms-home-kpi-check input {
+  flex-shrink: 0;
+}
+
+.atoms-home-kpi-sort {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.atoms-home-kpi-sort-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--atoms-border);
+  border-radius: 8px;
+  background: var(--atoms-surface);
+  cursor: grab;
+}
+
+.atoms-home-kpi-sort-item.is-dragging {
+  opacity: 0.55;
+  cursor: grabbing;
+}
+
+.atoms-home-kpi-sort-item.is-over {
+  border-color: var(--atoms-primary);
+  background: color-mix(in srgb, var(--atoms-primary) 8%, var(--atoms-surface));
+}
+
+.atoms-home-kpi-drag {
+  font-size: 18px;
+  color: var(--atoms-text-muted);
+  flex-shrink: 0;
+  cursor: grab;
+}
+
+.atoms-home-customize-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 12px;
+}
+
+.atoms-home-customize-panel {
+  flex: 1 1 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--atoms-border);
+  border-radius: 12px;
+  background: var(--atoms-surface-raised, var(--atoms-surface));
+}
+
+.atoms-home-customize-store {
+  font-size: 12px;
+  margin: 10px 0 0;
+}

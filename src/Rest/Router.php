@@ -70,6 +70,13 @@ final class Router
         $this->post($ns, '/settings', 'atoms_manage_settings', function (WP_REST_Request $r) {
             return Http::ok((new SettingsService())->save(Http::json($r)));
         });
+        $this->get($ns, '/home-layout', 'atoms_read', fn() => Http::ok((new \Atoms\Services\HomeDashboardService())->forCurrentUser()));
+        $this->post($ns, '/home-layout', 'atoms_read', function (WP_REST_Request $r) {
+            return Http::ok((new \Atoms\Services\HomeDashboardService())->save(get_current_user_id(), Http::json($r)));
+        });
+        $this->post($ns, '/home-layout/reset', 'atoms_read', function () {
+            return Http::ok((new \Atoms\Services\HomeDashboardService())->reset(get_current_user_id()));
+        });
         $this->get($ns, '/automation', 'atoms_manage_settings', fn() => Http::ok((new AutomationService())->status()));
         $this->post($ns, '/automation/run', 'atoms_manage_settings', function () {
             return Http::ok((new AutomationService())->run());
@@ -457,6 +464,11 @@ final class Router
                 'name'         => $user->display_name,
                 'roles'        => $user->roles,
                 'capabilities' => array_values(array_filter(array_keys($user->allcaps), static fn($c) => str_starts_with((string) $c, 'atoms_') && !empty($user->allcaps[$c]))),
+                'home'         => (new \Atoms\Services\HomeDashboardService())->forUser(
+                    (int) $user->ID,
+                    (array) $user->roles,
+                    (new SettingsService())->expose()
+                ),
             ],
             'branch_id' => $ctx->defaultBranchId() ?: ($visible[0]['id'] ?? null),
             'branches'  => $visible,
