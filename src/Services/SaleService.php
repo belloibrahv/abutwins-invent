@@ -361,6 +361,14 @@ final class SaleService
         $soldAt = (string) ($row['posted_at'] ?? $row['created_at'] ?? '');
         $asOf   = $this->db->now();
         foreach ($row['items'] as &$item) {
+            $item['quantity']     = (int) ($item['quantity'] ?? 1);
+            $item['imei_id']      = !empty($item['imei_id']) ? (int) $item['imei_id'] : null;
+            $item['product_id']   = (int) ($item['product_id'] ?? 0);
+            $item['variant_id']   = !empty($item['variant_id']) ? (int) $item['variant_id'] : null;
+            $item['selling_price'] = (int) ($item['selling_price'] ?? 0);
+            $item['cost_price']   = (int) ($item['cost_price'] ?? 0);
+            $item['min_price']    = (int) ($item['min_price'] ?? 0);
+            $item['discount']     = (int) ($item['discount'] ?? 0);
             $days = (int) ($item['warranty_days'] ?? 0);
             $item['warranty_expires'] = $policy->expiresOn($soldAt, $days);
             $item['in_warranty']      = $policy->covers($soldAt, $days, $asOf);

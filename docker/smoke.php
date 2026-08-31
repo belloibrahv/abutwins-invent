@@ -4827,7 +4827,7 @@ if ($afterQty !== $beforeQty - 3) {
     throw new RuntimeException('Quantity sale must decrement branch stock.');
 }
 $qtyItems = (new Atoms\Services\SaleService())->get((int) $qtySale['id'])['items'] ?? [];
-if (($qtyItems[0]['quantity'] ?? 0) !== 3 || !empty($qtyItems[0]['imei_id'])) {
+if ((int) ($qtyItems[0]['quantity'] ?? 0) !== 3 || !empty($qtyItems[0]['imei_id'])) {
     throw new RuntimeException('Quantity sale item must store quantity without imei_id.');
 }
 $voided = (new Atoms\Services\SaleService())->void((int) $qtySale['id'], 'Smoke quantity sale void');
