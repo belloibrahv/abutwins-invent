@@ -21,7 +21,7 @@ final class TradeInCalculatorWidget extends \Elementor\Widget_Base
 
     public function get_title(): string
     {
-        return 'ATOMS Trade-In / Swap Calculator';
+        return 'Trade-In / Swap Calculator';
     }
 
     public function get_icon(): string

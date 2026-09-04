@@ -11,6 +11,7 @@ final class ApprovalBrief
             'price_override'   => 'Sell below minimum',
             'expense'          => 'Expense over threshold',
             'stock_adjustment' => 'Stock count variance',
+            'price_bulk'       => 'Catalog price reduction',
             default            => ucfirst(str_replace('_', ' ', $type)),
         };
     }
@@ -24,6 +25,7 @@ final class ApprovalBrief
             'price_override'   => $this->price($payload),
             'expense'          => $this->expense($payload),
             'stock_adjustment' => $this->stock($payload),
+            'price_bulk'       => $this->priceBulk($payload),
             default            => '',
         };
     }
@@ -99,6 +101,42 @@ final class ApprovalBrief
                 if ($bit !== '') {
                     $bits[] = $bit;
                 }
+            }
+            if ($bits !== []) {
+                $line .= ' · ' . implode('; ', $bits);
+            }
+        }
+
+        return $reason !== '' ? $line . '. ' . $reason : $line;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function priceBulk(array $payload): string
+    {
+        $preview = is_array($payload['preview'] ?? null) ? $payload['preview'] : [];
+        $updated = (int) ($preview['updated'] ?? 0);
+        $variants = (int) ($preview['variants_updated'] ?? 0);
+        $field = (string) ($preview['field'] ?? 'current');
+        $reason = trim((string) ($preview['reason'] ?? ''));
+        $line = $updated . ' product(s)';
+        if ($variants > 0) {
+            $line .= ' · ' . $variants . ' variant(s)';
+        }
+        $line .= ' · ' . $field . ' price';
+        $changes = $preview['changes'] ?? [];
+        if (is_array($changes) && $changes !== []) {
+            $bits = [];
+            foreach (array_slice($changes, 0, 3) as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $name = trim((string) ($row['name'] ?? ''));
+                if ($name === '') {
+                    continue;
+                }
+                $bits[] = $name . ' ' . $this->naira(((int) ($row['from'] ?? 0)) / 100) . '→' . $this->naira(((int) ($row['to'] ?? 0)) / 100);
             }
             if ($bits !== []) {
                 $line .= ' · ' . implode('; ', $bits);

@@ -11,9 +11,12 @@ $atoms_brand = (new Atoms\Domain\ShopIdentity())->of((new Atoms\Services\Setting
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#4f46e5">
+  <meta name="theme-color" content="#2F3590">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title><?php echo esc_html($atoms_brand['company']); ?></title>
+  <link rel="icon" href="<?php echo esc_url(ATOMS_URL . 'assets/img/favicon.ico'); ?>" sizes="any">
+  <link rel="icon" type="image/png" href="<?php echo esc_url(ATOMS_URL . 'assets/img/favicon-32.png'); ?>" sizes="32x32">
+  <link rel="apple-touch-icon" href="<?php echo esc_url(ATOMS_URL . 'assets/img/apple-touch-icon.png'); ?>">
   <link rel="manifest" href="<?php echo esc_url($manifest); ?>">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
@@ -76,12 +79,13 @@ $atoms_brand = (new Atoms\Domain\ShopIdentity())->of((new Atoms\Services\Setting
 <div id="atoms-modal-root" class="atoms-modal-root hidden" aria-live="polite"></div>
 <div id="atoms-toasts" class="atoms-toasts" aria-live="polite"></div>
 <script>
-window.ATOMS = <?php echo wp_json_encode([
+window.ABUTWINS = window.ATOMS = <?php echo wp_json_encode([
     'root'  => esc_url_raw(rest_url('atoms/v1/')),
     'nonce' => wp_create_nonce('wp_rest'),
     'home'  => home_url('/atoms-app/'),
     'pwa'   => true,
     'sw'    => home_url('/atoms-app/sw.js'),
+    'product' => 'Abu Twins Invent',
 ]); ?>;
 </script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>

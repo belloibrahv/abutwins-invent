@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace Atoms\Integrations\Elementor;
 
-/** Shared Elementor theme selector for public ATOMS widgets. */
+/** Shared Elementor theme selector for public inventory widgets. */
 trait WidgetThemeControls
 {
     protected function registerThemeControl(): void

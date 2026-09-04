@@ -21,7 +21,7 @@ final class BranchShowcaseWidget extends \Elementor\Widget_Base
 
     public function get_title(): string
     {
-        return 'ATOMS Store Branch Showcase';
+        return 'Store Branch Showcase';
     }
 
     public function get_icon(): string

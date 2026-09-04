@@ -65,7 +65,7 @@ final class Pwa
             auth_redirect();
         }
         if (!current_user_can('atoms_access')) {
-            wp_die(esc_html__('You do not have access to ATOMS.', 'atoms'));
+            wp_die(esc_html__('You do not have access to Abu Twins Invent.', 'atoms'));
         }
         nocache_headers();
         include ATOMS_PATH . 'templates/pwa-app.php';
@@ -79,19 +79,33 @@ final class Pwa
         $brand = (new \Atoms\Domain\ShopIdentity())->of((new \Atoms\Services\SettingsService())->get());
         echo wp_json_encode([
             'name'             => $brand['company'],
-            'short_name'       => $brand['wordmark'] !== '' ? $brand['wordmark'] : 'ATOMS',
+            'short_name'       => $brand['wordmark'] !== '' ? $brand['wordmark'] : 'Abu Twins Softskills Investment',
             'description'      => $brand['company'] . ' inventory and operations',
             'start_url'        => home_url('/atoms-app/'),
             'scope'            => home_url('/atoms-app/'),
             'display'          => 'standalone',
             'background_color' => '#4E4FA0',
             'theme_color'      => '#4E4FA0',
-            'icons'            => [[
-                'src'   => ATOMS_URL . 'assets/img/icon.svg',
-                'sizes' => 'any',
-                'type'  => 'image/svg+xml',
-                'purpose' => 'any maskable',
-            ]],
+            'icons'            => [
+                [
+                    'src'     => ATOMS_URL . 'assets/img/icon-192.png',
+                    'sizes'   => '192x192',
+                    'type'    => 'image/png',
+                    'purpose' => 'any',
+                ],
+                [
+                    'src'     => ATOMS_URL . 'assets/img/icon-512.png',
+                    'sizes'   => '512x512',
+                    'type'    => 'image/png',
+                    'purpose' => 'any maskable',
+                ],
+                [
+                    'src'     => ATOMS_URL . 'assets/img/abutwins-mark.png',
+                    'sizes'   => '512x512',
+                    'type'    => 'image/png',
+                    'purpose' => 'any',
+                ],
+            ],
         ]);
         exit;
     }

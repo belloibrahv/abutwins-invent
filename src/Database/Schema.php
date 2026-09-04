@@ -85,6 +85,8 @@ final class Schema
                 is_serialized tinyint(1) NOT NULL DEFAULT 1,
                 track_mode varchar(16) NOT NULL DEFAULT 'imei',
                 min_selling_price bigint(20) NOT NULL DEFAULT 0,
+                current_selling_price bigint(20) NOT NULL DEFAULT 0,
+                market_price bigint(20) NOT NULL DEFAULT 0,
                 default_cost_price bigint(20) NOT NULL DEFAULT 0,
                 low_stock_threshold int(11) NOT NULL DEFAULT 2,
                 warranty_days int(11) NOT NULL DEFAULT 365,
@@ -105,6 +107,8 @@ final class Schema
                 color varchar(64) NULL,
                 storage varchar(64) NULL,
                 min_selling_price bigint(20) NULL,
+                current_selling_price bigint(20) NULL,
+                market_price bigint(20) NULL,
                 cost_price bigint(20) NULL,
                 is_active tinyint(1) NOT NULL DEFAULT 1,
                 created_at datetime NOT NULL,
@@ -553,6 +557,56 @@ final class Schema
                 UNIQUE KEY branch_product_variant (branch_id, product_id, variant_id),
                 KEY branch_id (branch_id),
                 KEY product_id (product_id)
+            ) $c;",
+
+            'product_branch_prices' => "CREATE TABLE {$p}product_branch_prices (
+                id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+                product_id bigint(20) unsigned NOT NULL,
+                variant_id bigint(20) unsigned NULL,
+                branch_id bigint(20) unsigned NOT NULL,
+                cost_price bigint(20) NOT NULL DEFAULT 0,
+                min_selling_price bigint(20) NOT NULL DEFAULT 0,
+                current_selling_price bigint(20) NOT NULL DEFAULT 0,
+                market_price bigint(20) NOT NULL DEFAULT 0,
+                created_at datetime NOT NULL,
+                updated_at datetime NOT NULL,
+                PRIMARY KEY  (id),
+                UNIQUE KEY product_branch_variant (product_id, branch_id, variant_id),
+                KEY branch_id (branch_id)
+            ) $c;",
+
+            'price_history' => "CREATE TABLE {$p}price_history (
+                id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+                product_id bigint(20) unsigned NOT NULL,
+                variant_id bigint(20) unsigned NULL,
+                branch_id bigint(20) unsigned NULL,
+                field varchar(32) NOT NULL DEFAULT 'current',
+                old_price bigint(20) NOT NULL DEFAULT 0,
+                new_price bigint(20) NOT NULL DEFAULT 0,
+                change_type varchar(32) NOT NULL DEFAULT 'bulk',
+                reason varchar(255) NULL,
+                status varchar(32) NOT NULL DEFAULT 'applied',
+                created_by bigint(20) unsigned NULL,
+                approved_by bigint(20) unsigned NULL,
+                created_at datetime NOT NULL,
+                PRIMARY KEY  (id),
+                KEY product_id (product_id),
+                KEY created_at (created_at),
+                KEY status (status)
+            ) $c;",
+
+            'price_schedules' => "CREATE TABLE {$p}price_schedules (
+                id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+                name varchar(191) NOT NULL,
+                payload longtext NOT NULL,
+                effective_at datetime NOT NULL,
+                status varchar(32) NOT NULL DEFAULT 'pending',
+                created_by bigint(20) unsigned NULL,
+                branch_id bigint(20) unsigned NULL,
+                created_at datetime NOT NULL,
+                applied_at datetime NULL,
+                PRIMARY KEY  (id),
+                KEY status_effective (status, effective_at)
             ) $c;",
 
             'idempotency' => "CREATE TABLE {$p}idempotency (

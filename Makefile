@@ -1,4 +1,4 @@
-.PHONY: tools test up down smoke release
+.PHONY: tools test up down smoke release theme-release
 
 tools:
 	chmod +x bin/* tools/install-tools.sh
@@ -24,3 +24,11 @@ release:
 	cp -r src templates assets build/atoms/
 	cd build && zip -r ../dist/abutwins-invent.zip atoms -x "*.DS_Store"
 	rm -rf build
+
+theme-release:
+	rm -rf build/theme dist/abutwins-theme.zip
+	mkdir -p build dist
+	cp -r theme/abutwins build/abutwins
+	cd build && zip -r ../dist/abutwins-theme.zip abutwins -x "*.DS_Store"
+	rm -rf build/abutwins
+	@ls -lh dist/abutwins-theme.zip

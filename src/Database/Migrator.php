@@ -37,5 +37,26 @@ final class Migrator
         if (is_array($imeiCol) && strtoupper((string) ($imeiCol['Null'] ?? '')) === 'NO') {
             $wpdb->query("ALTER TABLE {$saleItems} MODIFY imei_id bigint(20) unsigned NULL");
         }
+
+        $products = $wpdb->prefix . 'atoms_products';
+        $variants = $wpdb->prefix . 'atoms_product_variants';
+        $this->ensureColumn($products, 'current_selling_price', 'bigint(20) NOT NULL DEFAULT 0 AFTER min_selling_price');
+        $this->ensureColumn($products, 'market_price', 'bigint(20) NOT NULL DEFAULT 0 AFTER current_selling_price');
+        $this->ensureColumn($variants, 'current_selling_price', 'bigint(20) NULL AFTER min_selling_price');
+        $this->ensureColumn($variants, 'market_price', 'bigint(20) NULL AFTER current_selling_price');
+
+        // Backfill current selling price from floor when never set.
+        $wpdb->query("UPDATE {$products} SET current_selling_price = min_selling_price WHERE current_selling_price = 0 AND min_selling_price > 0");
+        $wpdb->query("UPDATE {$variants} SET current_selling_price = min_selling_price WHERE (current_selling_price IS NULL OR current_selling_price = 0) AND min_selling_price IS NOT NULL AND min_selling_price > 0");
+    }
+
+    private function ensureColumn(string $table, string $column, string $definition): void
+    {
+        global $wpdb;
+        $exists = $wpdb->get_row("SHOW COLUMNS FROM {$table} LIKE '{$column}'", ARRAY_A);
+        if (is_array($exists)) {
+            return;
+        }
+        $wpdb->query("ALTER TABLE {$table} ADD COLUMN {$column} {$definition}");
     }
 }

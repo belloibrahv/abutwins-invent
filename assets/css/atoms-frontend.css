@@ -1,34 +1,34 @@
 /**
- * ATOMS — Frontend & Elementor Widget Stylesheet
- * Modern Google Material 3 & shadcn/ui Inspired Design Tokens
+ * Abu Twins Invent — Frontend & Elementor Widget Stylesheet
+ * Matches the Invent ops palette (royal blue brand mark)
  */
 
 :root {
-  --atoms-fe-primary: #4f46e5;
-  --atoms-fe-primary-hover: #4338ca;
-  --atoms-fe-accent: #10b981;
-  --atoms-fe-accent-hover: #059669;
-  --atoms-fe-warn: #f59e0b;
-  --atoms-fe-danger: #ef4444;
-  --atoms-fe-bg: #f8fafc;
+  --atoms-fe-primary: #2F3590;
+  --atoms-fe-primary-hover: #252B78;
+  --atoms-fe-accent: #0F9F6E;
+  --atoms-fe-accent-hover: #0B7F58;
+  --atoms-fe-warn: #EAB308;
+  --atoms-fe-danger: #E11D48;
+  --atoms-fe-bg: #F2F4F9;
   --atoms-fe-surface: #ffffff;
-  --atoms-fe-border: #e2e8f0;
-  --atoms-fe-text: #0f172a;
-  --atoms-fe-muted: #64748b;
-  --atoms-fe-radius: 14px;
-  --atoms-fe-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
-  --atoms-fe-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.04);
+  --atoms-fe-border: #E3E7F0;
+  --atoms-fe-text: #0B1220;
+  --atoms-fe-muted: #647089;
+  --atoms-fe-radius: 16px;
+  --atoms-fe-shadow: 0 8px 20px -10px rgba(11, 18, 32, 0.12);
+  --atoms-fe-shadow-lg: 0 18px 36px -16px rgba(11, 18, 32, 0.16);
 }
 
 .atoms-fe-widget {
-  font-family: 'Plus Jakarta Sans', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Plus Jakarta Sans', 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   color: var(--atoms-fe-text);
   background: var(--atoms-fe-surface);
   border: 1px solid var(--atoms-fe-border);
   border-radius: var(--atoms-fe-radius);
   box-shadow: var(--atoms-fe-shadow);
-  padding: 24px;
-  margin: 16px 0;
+  padding: 26px;
+  margin: 0;
   box-sizing: border-box;
 }
 
@@ -51,8 +51,8 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--atoms-fe-primary);
-  background: #eef2ff;
-  border: 1px solid #c7d2fe;
+  background: #EEF0FB;
+  border: 1px solid #C5CAE8;
   padding: 4px 10px;
   border-radius: 9999px;
   margin-bottom: 10px;
@@ -89,9 +89,12 @@
 }
 
 .atoms-fe-widget[data-theme="brand"] {
-  --atoms-fe-primary: #4f46e5;
-  border-color: #c7d2fe;
+  --atoms-fe-primary: #2F3590;
+  border-color: #C5CAE8;
   box-shadow: var(--atoms-fe-shadow-lg);
+  background:
+    radial-gradient(420px 160px at 100% 0%, rgba(47, 53, 144, 0.08), transparent 55%),
+    var(--atoms-fe-surface);
 }
 
 .atoms-fe-widget[data-theme="dark"] .atoms-fe-input,
@@ -131,30 +134,59 @@
 .atoms-fe-input,
 .atoms-fe-select {
   width: 100%;
-  height: 44px;
+  height: 46px;
   padding: 8px 14px;
   font-family: inherit;
   font-size: 14px;
+  font-weight: 600;
   color: var(--atoms-fe-text);
   background: #ffffff;
-  border: 1px solid var(--atoms-fe-border);
+  border: 1.5px solid #C5CAE8;
   border-radius: 10px;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
 }
 
 .atoms-fe-input-wrap .atoms-fe-input {
   padding-left: 38px;
+  background: #ffffff;
+  border-color: var(--atoms-fe-border);
+  font-weight: 500;
 }
 
 .atoms-fe-input:focus,
 .atoms-fe-select:focus {
   outline: none;
   border-color: var(--atoms-fe-primary);
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+  background: #ffffff;
+  box-shadow: 0 0 0 4px rgba(47, 53, 144, 0.18);
+}
+
+.atoms-fe-select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 42px;
+  padding-left: 14px;
+  cursor: pointer;
+  font-weight: 700;
+  color: #252B78;
+  background-color: #ffffff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%232F3590' d='M1.4 0.6L6 5.2 10.6.6 12 2 6 8 0 2z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 12px 8px;
+  border: 1.5px solid #C5CAE8;
+  box-shadow: 0 0 0 3px rgba(47, 53, 144, 0.08);
+}
+
+.atoms-fe-select:hover {
+  border-color: var(--atoms-fe-primary);
+  background-color: #ffffff;
+  box-shadow: 0 0 0 3px rgba(47, 53, 144, 0.16);
 }
 
 .atoms-fe-select-wrap {
-  flex: 0 1 200px;
+  position: relative;
+  flex: 0 1 220px;
 }
 
 .atoms-fe-btn {
@@ -260,7 +292,7 @@
 
 .atoms-fe-type-pill.device {
   background: #e0e7ff;
-  color: #3730a3;
+  color: #1E2366;
 }
 
 .atoms-fe-card-brand {
@@ -458,8 +490,8 @@
 .atoms-fe-swap-result {
   margin-top: 20px;
   padding: 20px;
-  background: #eef2ff;
-  border: 1px solid #c7d2fe;
+  background: #EEF0FB;
+  border: 1px solid #C5CAE8;
   border-radius: 12px;
   text-align: center;
 }
@@ -504,7 +536,7 @@
 .atoms-fe-branch-icon {
   font-size: 24px;
   color: var(--atoms-fe-primary);
-  background: #eef2ff;
+  background: #EEF0FB;
   padding: 8px;
   border-radius: 10px;
 }

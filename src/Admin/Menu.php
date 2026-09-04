@@ -9,6 +9,10 @@ final class Menu
     {
         add_action('admin_menu', [$this, 'menu']);
         add_action('admin_enqueue_scripts', [$this, 'assets']);
+        add_action('admin_head', [$this, 'favicon'], 1);
+        add_action('login_head', [$this, 'favicon'], 1);
+        add_action('wp_head', [$this, 'favicon'], 1);
+        add_filter('get_site_icon_url', [$this, 'siteIconUrl'], 10, 2);
         add_action('admin_init', [$this, 'maybeRedirect']);
         add_action('in_admin_header', static function (): void {
             if (isset($_GET['page']) && $_GET['page'] === 'atoms') {
@@ -30,14 +34,35 @@ final class Menu
     public function menu(): void
     {
         add_menu_page(
-            'ATOMS',
-            'ATOMS',
+            'Abu Twins Invent',
+            'Abu Twins Invent',
             'atoms_access',
             'atoms',
             [$this, 'render'],
-            'dashicons-smartphone',
+            ATOMS_URL . 'assets/img/abutwins-mark.png',
             2
         );
+    }
+
+    public function favicon(): void
+    {
+        $base = ATOMS_URL . 'assets/img/';
+        echo '<link rel="icon" href="' . esc_url($base . 'favicon.ico') . '?v=' . rawurlencode(ATOMS_VERSION) . '" sizes="any">' . "\n";
+        echo '<link rel="icon" type="image/png" href="' . esc_url($base . 'favicon-32.png') . '?v=' . rawurlencode(ATOMS_VERSION) . '" sizes="32x32">' . "\n";
+        echo '<link rel="apple-touch-icon" href="' . esc_url($base . 'apple-touch-icon.png') . '?v=' . rawurlencode(ATOMS_VERSION) . '">' . "\n";
+    }
+
+    public function siteIconUrl($url, $size)
+    {
+        $size = (int) $size;
+        if ($size > 0 && $size <= 32) {
+            return ATOMS_URL . 'assets/img/favicon-32.png';
+        }
+        if ($size > 32 && $size <= 180) {
+            return ATOMS_URL . 'assets/img/apple-touch-icon.png';
+        }
+
+        return ATOMS_URL . 'assets/img/abutwins-mark.png';
     }
 
     public function render(): void
@@ -102,7 +127,7 @@ final class Menu
         );
 
         wp_enqueue_script('atoms', ATOMS_URL . 'assets/js/atoms.js', ['atoms-chartjs', 'atoms-scanner'], ATOMS_VERSION, true);
-        wp_localize_script('atoms', 'ATOMS', [
+        $boot = [
             'root'  => esc_url_raw(rest_url('atoms/v1/')),
             'nonce' => wp_create_nonce('wp_rest'),
             'home'  => admin_url('admin.php?page=atoms'),
@@ -110,7 +135,11 @@ final class Menu
             'sw'    => home_url('/atoms-app/sw.js'),
             'app'   => home_url('/atoms-app/'),
             'google_maps_key' => $settings['google_maps_key'] ?? '',
-        ]);
+            'product' => 'Abu Twins Invent',
+        ];
+        wp_localize_script('atoms', 'ABUTWINS', $boot);
+        // Backward-compatible alias for cached pages.
+        wp_localize_script('atoms', 'ATOMS', $boot);
     }
 
     public function maybeRedirect(): void

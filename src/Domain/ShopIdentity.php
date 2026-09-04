@@ -13,7 +13,7 @@ final class ShopIdentity
     {
         $company = trim((string) ($ops['company'] ?? ''));
         if ($company === '') {
-            $company = 'ATOMS';
+            $company = 'Abu Twins Softskills Investment';
         }
         $wordmark = trim((string) ($ops['wordmark'] ?? ''));
         if ($wordmark === '') {

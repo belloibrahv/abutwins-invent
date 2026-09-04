@@ -28,6 +28,7 @@ final class AutomationCronTest extends TestCase
                 'stuck_transfers',
                 'stuck_repairs',
                 'return_escalation',
+                'price_schedules',
                 'daily_digest',
             ],
             AutomationService::countKeyNames()

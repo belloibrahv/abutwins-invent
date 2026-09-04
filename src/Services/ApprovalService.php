@@ -211,6 +211,7 @@ final class ApprovalService
             'price_override'   => $this->executeSale($payload, $approvalId),
             'expense'          => ['expense' => (new ExpenseService())->postApproved($payload)],
             'stock_adjustment' => ['stock_count' => (new StockCountService())->postApproved($payload)],
+            'price_bulk'       => ['pricing' => (new PricingService())->applyApprovedBulk($payload)],
             default            => throw new DomainException('Unknown approval type: ' . $type),
         };
     }

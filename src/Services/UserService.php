@@ -66,7 +66,7 @@ final class UserService
             throw new DomainException('Name, email, username, and password are required.');
         }
         if (!isset(Capabilities::ROLES[$role])) {
-            throw new DomainException('Choose a valid ATOMS staff role.');
+            throw new DomainException('Choose a valid staff role.');
         }
         if (username_exists($username) || email_exists($email)) {
             throw new DomainException('That username or email is already in use.');

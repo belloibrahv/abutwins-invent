@@ -1,11 +1,11 @@
 /**
- * ATOMS — Frontend & Elementor Public Widgets Script
+ * Abu Twins Invent — Frontend & Elementor Public Widgets Script
  */
 
 (() => {
   'use strict';
 
-  const config = window.ATOMS_FRONTEND || {
+  const config = window.ABUTWINS_FRONTEND || window.ATOMS_FRONTEND || {
     root: '/wp-json/atoms/v1/public/',
     nonce: '',
     settings: {},
@@ -251,7 +251,7 @@
           const waLink = waPhone ? `https://wa.me/${waPhone}?text=${waMsg}` : '#';
 
           resultBox.innerHTML = `
-            <div style="font-size:13px; text-transform:uppercase; letter-spacing:0.05em; font-weight:700; color:#4f46e5;">Estimated Trade-In Value</div>
+            <div style="font-size:13px; text-transform:uppercase; letter-spacing:0.05em; font-weight:700; color:#2F3590;">Estimated Trade-In Value</div>
             <div class="atoms-fe-swap-val">${escapeHtml(res.estimated_fmt)}</div>
             <p style="margin:4px 0 14px; font-size:14px; color:#475569;">
               Valuation Range: <strong>${escapeHtml(res.estimated_min)}</strong> – <strong>${escapeHtml(res.estimated_max)}</strong>

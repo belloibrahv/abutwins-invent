@@ -28,7 +28,7 @@ final class WarrantyPolicyTest extends TestCase
     public function test_shop_identity_does_not_hardcode_a_client(): void
     {
         $id = new ShopIdentity();
-        $this->assertSame('ATOMS', $id->of([])['wordmark']);
+        $this->assertSame('Abu Twins Softskills Investment', $id->of([])['wordmark']);
         $this->assertSame('North Shop', $id->of(['company' => 'North Shop'])['wordmark']);
         $this->assertSame('north', $id->of([
             'company'         => 'North Shop Limited',

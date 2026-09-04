@@ -39,8 +39,8 @@ final class ReceiptLayout
         }
 
         return [
-            'company'         => (string) ($identity['company'] ?? 'ATOMS'),
-            'wordmark'        => (string) ($identity['wordmark'] ?? 'ATOMS'),
+            'company'         => (string) ($identity['company'] ?? 'Abu Twins Softskills Investment'),
+            'wordmark'        => (string) ($identity['wordmark'] ?? 'Abu Twins Softskills Investment'),
             'accent'          => (string) ($identity['accent'] ?? ''),
             'tagline'         => (string) ($identity['tagline'] ?? ''),
             'branch_name'     => (string) ($branch['name'] ?? ($sale['branch']['name'] ?? '')),

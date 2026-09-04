@@ -104,6 +104,37 @@ final class Router
         $this->get($ns, '/products', 'atoms_read', function (WP_REST_Request $r) {
             return Http::ok((new ProductService())->search((string) $r->get_param('q')));
         });
+        $this->post($ns, '/products/prices/bulk', 'atoms_manage_products', function (WP_REST_Request $r) {
+            return Http::ok((new ProductService())->bulkUpdatePrices(Http::json($r)));
+        });
+
+        $this->get($ns, '/pricing/dashboard', 'atoms_read', function () {
+            return Http::ok((new \Atoms\Services\PricingService())->dashboard());
+        });
+        $this->get($ns, '/pricing/current', 'atoms_read', function (WP_REST_Request $r) {
+            return Http::ok((new \Atoms\Services\PricingService())->currentPrices($r->get_params()));
+        });
+        $pricingWrite = static fn(): bool => current_user_can('atoms_manage_pricing') || current_user_can('atoms_manage_products');
+        $this->post($ns, '/pricing/bulk', $pricingWrite, function (WP_REST_Request $r) {
+            return Http::ok((new \Atoms\Services\PricingService())->bulkUpdate(Http::json($r)));
+        });
+        $this->post($ns, '/pricing/import', $pricingWrite, function (WP_REST_Request $r) {
+            $body = Http::json($r);
+            $csv = (string) ($body['csv'] ?? '');
+            unset($body['csv']);
+
+            return Http::ok((new \Atoms\Services\PricingService())->importCsv($csv, $body));
+        });
+        $this->get($ns, '/pricing/history', 'atoms_read', function (WP_REST_Request $r) {
+            return Http::ok((new \Atoms\Services\PricingService())->history($r->get_params()));
+        });
+        $this->post($ns, '/pricing/branch', $pricingWrite, function (WP_REST_Request $r) {
+            return Http::ok((new \Atoms\Services\PricingService())->setBranchPrice(Http::json($r)));
+        });
+        $this->post($ns, '/pricing/schedules/activate', $pricingWrite, function () {
+            return Http::ok(['activated' => (new \Atoms\Services\PricingService())->activateDueSchedules()]);
+        });
+
         $this->post($ns, '/products', 'atoms_manage_products', function (WP_REST_Request $r) {
             return Http::ok((new ProductService())->save(null, Http::json($r)), 201);
         });
@@ -373,7 +404,13 @@ final class Router
             [$from, $to, $bid] = $this->reportRange($r);
             $type = (string) ($r->get_param('type') ?: 'sales');
 
-            return Http::ok((new ReportService())->export($type, $from, $to, $bid));
+            return Http::ok((new ReportService())->export(
+                $type,
+                $from,
+                $to,
+                $bid,
+                (string) ($r->get_param('format') ?: 'csv')
+            ));
         });
 
         $this->get($ns, '/repairs', 'atoms_manage_repairs', fn() => Http::ok((new RepairService())->list()));

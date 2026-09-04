@@ -19,7 +19,7 @@ final class PosPortalWidget extends \Elementor\Widget_Base
 
     public function get_title(): string
     {
-        return 'ATOMS Staff Operations Portal Embed';
+        return 'Staff Operations Portal';
     }
 
     public function get_icon(): string

@@ -38,6 +38,7 @@ final class SettingsService
             'whatsapp_token'      => '',
             'whatsapp_enabled'    => false,
             'expense_threshold'   => 50000,
+            'price_reduction_approval_pct' => 10,
             'low_stock_notify'    => true,
             'automation_enabled'  => true,
             'digest_enabled'      => true,
@@ -92,6 +93,9 @@ final class SettingsService
             'whatsapp_token'      => $this->sealToken($data, (string) ($current['whatsapp_token'] ?? '')),
             'whatsapp_enabled'    => !empty($data['whatsapp_enabled']),
             'expense_threshold'   => (float) ($data['expense_threshold'] ?? $current['expense_threshold']),
+            'price_reduction_approval_pct' => (new \Atoms\Domain\PricingPolicy())->clampReductionPct(
+                (float) ($data['price_reduction_approval_pct'] ?? $current['price_reduction_approval_pct'] ?? 10)
+            ),
             'low_stock_notify'    => !isset($data['low_stock_notify']) || !empty($data['low_stock_notify']),
             'automation_enabled'  => !isset($data['automation_enabled']) || !empty($data['automation_enabled']),
             'digest_enabled'      => !isset($data['digest_enabled']) || !empty($data['digest_enabled']),

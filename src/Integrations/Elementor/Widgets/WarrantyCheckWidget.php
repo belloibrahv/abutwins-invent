@@ -21,7 +21,7 @@ final class WarrantyCheckWidget extends \Elementor\Widget_Base
 
     public function get_title(): string
     {
-        return 'ATOMS IMEI Warranty Checker';
+        return 'IMEI Warranty Checker';
     }
 
     public function get_icon(): string
@@ -86,7 +86,7 @@ final class WarrantyCheckWidget extends \Elementor\Widget_Base
             [
                 'label'     => 'Badge & Button Color',
                 'type'      => \Elementor\Controls_Manager::COLOR,
-                'default'   => '#4f46e5',
+                'default'   => '#2F3590',
                 'selectors' => [
                     '{{WRAPPER}} .atoms-fe-btn.primary' => 'background-color: {{VALUE}};',
                 ],

@@ -1,4 +1,8 @@
 (() => {
+  const CFG = window.ABUTWINS || window.ATOMS || {};
+  if (!window.ABUTWINS && window.ATOMS) {
+    window.ABUTWINS = window.ATOMS;
+  }
   const state = {
     bootstrap: null,
     branchId: null,
@@ -19,6 +23,7 @@
     expenseId: null,
     searchQ: '',
     inboundTab: 'queue',
+    pager: {},
   };
 
   let renderGen = 0;
@@ -69,6 +74,7 @@
       state.report?.to,
       state.audit?.page,
       state.inboundTab,
+      JSON.stringify(state.pager || {}),
     ].join('|');
   }
 
@@ -265,11 +271,21 @@
       id: 'stock',
       label: 'Stock & purchasing',
       items: [
-        { hash: 'inventory', label: 'Products & pricing', icon: 'inventory_2', cap: 'atoms_read' },
+        { hash: 'inventory', label: 'Product catalog', icon: 'inventory_2', cap: 'atoms_read' },
         { hash: 'inbound', label: 'Inbound manifest', icon: 'move_to_inbox', cap: 'atoms_manage_inbound', altCap: 'atoms_manage_purchases' },
         { hash: 'purchases', label: 'Purchase orders', icon: 'local_shipping', cap: 'atoms_manage_purchases' },
         { hash: 'transfers', label: 'Stock transfers', icon: 'sync_alt', cap: 'atoms_manage_transfers' },
         { hash: 'stocktake', label: 'Stock count', icon: 'fact_check', cap: 'atoms_manage_inventory' },
+      ],
+    },
+    {
+      id: 'pricing',
+      label: 'Pricing & governance',
+      items: [
+        { hash: 'pricing', label: 'Price desk', icon: 'sell', cap: 'atoms_read' },
+        { hash: 'pricing-bulk', label: 'Bulk price update', icon: 'price_change', cap: 'atoms_manage_pricing', altCap: 'atoms_manage_products' },
+        { hash: 'pricing-import', label: 'Market price import', icon: 'upload_file', cap: 'atoms_manage_pricing', altCap: 'atoms_manage_products' },
+        { hash: 'pricing-history', label: 'Price history', icon: 'history', cap: 'atoms_read' },
       ],
     },
     {
@@ -454,7 +470,7 @@
     const method = String(options.method || 'GET').toUpperCase();
     const headers = {
       'Content-Type': 'application/json',
-      'X-WP-Nonce': ATOMS.nonce,
+      'X-WP-Nonce': CFG.nonce,
       ...(options.headers || {}),
     };
     if (options.idempotencyKey) {
@@ -462,7 +478,7 @@
     }
     let res;
     try {
-      res = await fetch(ATOMS.root + path.replace(/^\//, ''), {
+      res = await fetch(CFG.root + path.replace(/^\//, ''), {
         credentials: 'same-origin',
         ...options,
         headers,
@@ -483,7 +499,7 @@
       json = raw ? JSON.parse(raw) : {};
     } catch (_) {
       const plain = raw.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-      throw new Error(plain.includes('Fatal error') ? 'Server error loading ATOMS API. Refresh after the plugin update finishes.' : (plain.slice(0, 180) || `Request failed (${res.status})`));
+      throw new Error(plain.includes('Fatal error') ? 'Server error loading inventory API. Refresh after the plugin update finishes.' : (plain.slice(0, 180) || `Request failed (${res.status})`));
     }
     if (!res.ok) {
       const rawMsg = json.message || json.data?.message || `Request failed (${res.status})`;
@@ -649,14 +665,31 @@
     state.flash = { text, type };
   }
 
+  /** Wrap native selects so CSS can draw a clear chevron and focus ring. */
+  function decorateSelectHtml(html) {
+    return String(html || '')
+      .replace(/<select(\s[^>]*)?>/gi, (match, attrs = '') => {
+        const a = attrs || '';
+        if (/\batoms-select\b/.test(a)) return match;
+        if (/\bclass\s*=/.test(a)) {
+          return `<select${a.replace(/class\s*=\s*(["'])/, 'class=$1atoms-select ')}>`;
+        }
+        return `<select class="atoms-select"${a}>`;
+      })
+      .replace(/(<select\b[\s\S]*?<\/select>)/gi, (sel) => {
+        if (/atoms-select-wrap/.test(sel)) return sel;
+        return `<div class="atoms-select-wrap"><span class="material-symbols-outlined atoms-select-icon" aria-hidden="true">unfold_more</span>${sel}</div>`;
+      });
+  }
+
   function field(label, html) {
-    return `<div class="atoms-field"><label>${label}</label>${html}</div>`;
+    return `<div class="atoms-field"><label>${label}</label>${decorateSelectHtml(html)}</div>`;
   }
 
   function scanInput(id, placeholder, extra = '') {
     return `<div class="atoms-scan-row">
       <input id="${id}" data-atoms-scan-input="1" inputmode="numeric" placeholder="${placeholder}" autocomplete="off" ${extra}>
-      <button type="button" class="atoms-btn ghost js-scan" data-target="${id}" title="Scan with camera or USB scanner"><span class="material-symbols-outlined">photo_camera</span> Scan</button>
+      <button type="button" class="atoms-btn sm js-scan" data-target="${id}" title="Scan with camera or USB scanner"><span class="material-symbols-outlined">qr_code_scanner</span> Scan</button>
     </div>`;
   }
 
@@ -686,11 +719,28 @@
       </div>`;
   }
 
-  function kpiCard(label, value, footer = '', tone = '') {
+  /** Convenience header used by Pricing screens (wraps pageShell). */
+  function pageHeader(title, subtitle = '', actions = '') {
+    return pageShell({
+      group: 'Pricing & governance',
+      trail: title,
+      title,
+      subtitle,
+      actions,
+    });
+  }
+
+  function kpiCard(label, value, footer = '', tone = '', icon = '') {
     const raw = String(value ?? '');
     const isMoney = raw.includes('₦');
+    const iconHtml = icon
+      ? `<span class="atoms-kpi-icon${tone ? ` tone-${tone}` : ''}" aria-hidden="true"><span class="material-symbols-outlined">${icon}</span></span>`
+      : '';
     return `<div class="atoms-kpi-card${tone ? ` tone-${tone}` : ''}${isMoney ? ' is-money' : ''}">
-      <div class="atoms-kpi-label">${escapeHtml(label)}</div>
+      <div class="atoms-kpi-top">
+        <div class="atoms-kpi-label">${escapeHtml(label)}</div>
+        ${iconHtml}
+      </div>
       <div class="atoms-kpi-value${isMoney ? ' is-money' : ''}">${value}</div>
       ${footer ? `<div class="atoms-kpi-foot">${escapeHtml(footer)}</div>` : ''}
     </div>`;
@@ -733,6 +783,60 @@
         </div>
       </div>
       <div class="atoms-table-wrap">${body}</div>
+    </div>`;
+  }
+
+  const TABLE_PAGE_SIZE = 25;
+
+  function pagerPage(key) {
+    if (!state.pager || typeof state.pager !== 'object') state.pager = {};
+    return Math.max(1, Number(state.pager[key] || 1));
+  }
+
+  function setPagerPage(key, page) {
+    if (!state.pager || typeof state.pager !== 'object') state.pager = {};
+    state.pager[key] = Math.max(1, Number(page) || 1);
+  }
+
+  /** Slice a list for on-screen tables. Resets page when the list shrinks below the current page. */
+  function paginateList(items, key, perPage = TABLE_PAGE_SIZE) {
+    const list = Array.isArray(items) ? items : [];
+    const per = Math.max(5, Number(perPage) || TABLE_PAGE_SIZE);
+    const total = list.length;
+    const pages = Math.max(1, Math.ceil(total / per) || 1);
+    let page = pagerPage(key);
+    if (page > pages) {
+      page = pages;
+      setPagerPage(key, page);
+    }
+    const start = (page - 1) * per;
+    return {
+      key,
+      page,
+      pages,
+      per,
+      total,
+      items: list.slice(start, start + per),
+      start: total ? start + 1 : 0,
+      end: Math.min(total, start + per),
+    };
+  }
+
+  function pagerBar(p) {
+    if (!p || !p.key) return '';
+    if (p.total <= 0) return '';
+    if (p.total <= p.per) {
+      return `<div class="atoms-pager"><span class="atoms-pager-meta">${p.total} row${p.total === 1 ? '' : 's'}</span></div>`;
+    }
+    return `<div class="atoms-pager" role="navigation" aria-label="Table pages">
+      <span class="atoms-pager-meta">${p.start}–${p.end} of ${p.total}</span>
+      <div class="atoms-pager-controls">
+        <button type="button" class="atoms-btn ghost sm js-pager" data-pager="${escapeHtml(p.key)}" data-page="1" ${p.page <= 1 ? 'disabled' : ''} title="First page" aria-label="First page">«</button>
+        <button type="button" class="atoms-btn ghost sm js-pager" data-pager="${escapeHtml(p.key)}" data-page="${p.page - 1}" ${p.page <= 1 ? 'disabled' : ''} aria-label="Previous page">Previous</button>
+        <span class="atoms-pager-page">Page ${p.page} of ${p.pages}</span>
+        <button type="button" class="atoms-btn ghost sm js-pager" data-pager="${escapeHtml(p.key)}" data-page="${p.page + 1}" ${p.page >= p.pages ? 'disabled' : ''} aria-label="Next page">Next</button>
+        <button type="button" class="atoms-btn ghost sm js-pager" data-pager="${escapeHtml(p.key)}" data-page="${p.pages}" ${p.page >= p.pages ? 'disabled' : ''} title="Last page" aria-label="Last page">»</button>
+      </div>
     </div>`;
   }
 
@@ -788,6 +892,10 @@
       pos: screenPos,
       imei: screenImei,
       inventory: screenInventory,
+      pricing: screenPricingDesk,
+      'pricing-bulk': screenPricingBulk,
+      'pricing-import': screenPricingImport,
+      'pricing-history': screenPricingHistory,
       inbound: screenInbound,
       purchases: screenPurchases,
       transfers: screenTransfers,
@@ -986,25 +1094,25 @@
     const qtyStock = d.quantity_stock || {};
     const today = d.today || { net: 0, collected: 0, by_type: { retail: { net: 0 }, wholesale: { net: 0 } } };
     const builders = {
-      sales_today: () => kpiCard('Sales today', money(today.net), `Retail ${money(today.by_type?.retail?.net || 0)}`),
-      cash_collected: () => kpiCard('Cash collected', money(today.collected), 'Received today'),
-      customer_balances: () => kpiCard('Customer balances', money(d.receivables), 'Outstanding credit'),
-      supplier_payables: () => kpiCard('Supplier payables', money(d.payables), 'Amount we owe'),
-      overdue_invoices: () => kpiCard('Overdue invoices', String(d.overdue_invoices || 0), `${d.debt_days || 7}+ days late`, (d.overdue_invoices || 0) > 0 ? 'danger' : ''),
-      unread_alerts: () => kpiCard('Unread alerts', String(d.notify_unread || 0), 'Needs attention', (d.notify_unread || 0) > 0 ? 'warn' : ''),
-      devices_in_stock: () => kpiCard('Devices in stock', String(imei.available || 0), 'Available at this branch'),
-      accessories_stock: () => kpiCard('Accessories on hand', String(qtyStock.qty || 0), `${qtyStock.sku_count || 0} SKU(s)`),
-      low_stock_items: () => kpiCard('Low stock items', String((d.low_stock || []).length), 'At or below threshold', (d.low_stock || []).length ? 'warn' : ''),
-      in_transit: () => kpiCard('In transit', String(d.in_transit || 0), 'Transfers on the way'),
-      open_repairs: () => kpiCard('Open repairs', String(d.open_repairs || 0), 'Active tickets'),
-      stuck_repairs: () => kpiCard('Stuck repairs', String(d.operations_snapshot?.stuck_repair_count || 0), `${d.repair_days || 3}+ days`, (d.operations_snapshot?.stuck_repair_count || 0) > 0 ? 'warn' : ''),
-      faulty_devices: () => kpiCard('Faulty devices', String(d.operations_snapshot?.faulty_device_count || 0), 'Awaiting resolution'),
-      repairs_today: () => kpiCard('Repairs completed today', String((d.today_repair_lines || []).length), 'Closed tickets'),
-      net_cash_today: () => kpiCard('Net cash today', money(d.today_cash_snapshot?.net || d.executive_snapshot?.cash_net_today || 0), 'In minus out'),
-      receivables: () => kpiCard('Receivables', money(d.receivables), `${d.executive_snapshot?.receivable_party_count || 0} customers`),
-      payables: () => kpiCard('Payables', money(d.payables), `${d.executive_snapshot?.payable_party_count || 0} suppliers`),
-      pending_approvals: () => kpiCard('Pending approvals', String(d.pending_approvals || 0), 'Waiting for review', (d.pending_approvals || 0) > 0 ? 'warn' : ''),
-      wholesale_today: () => kpiCard('Wholesale today', money(today.by_type?.wholesale?.net || 0), 'Wholesale channel'),
+      sales_today: () => kpiCard('Sales today', money(today.net), `Retail ${money(today.by_type?.retail?.net || 0)}`, '', 'point_of_sale'),
+      cash_collected: () => kpiCard('Cash collected', money(d.today_cash_snapshot?.inflows ?? today.collected), 'Inflows today', '', 'payments'),
+      customer_balances: () => kpiCard('Customer balances', money(d.receivables), 'Outstanding credit', '', 'account_balance_wallet'),
+      supplier_payables: () => kpiCard('Supplier payables', money(d.payables), 'Amount we owe', '', 'request_quote'),
+      overdue_invoices: () => kpiCard('Overdue invoices', String(d.overdue_invoices || 0), `${d.debt_days || 7}+ days late`, (d.overdue_invoices || 0) > 0 ? 'danger' : '', 'warning'),
+      unread_alerts: () => kpiCard('Unread alerts', String(d.notify_unread || 0), 'Needs attention', (d.notify_unread || 0) > 0 ? 'warn' : '', 'notifications_active'),
+      devices_in_stock: () => kpiCard('Devices in stock', String(imei.available || 0), 'Available at this branch', 'ok', 'smartphone'),
+      accessories_stock: () => kpiCard('Accessories on hand', String(qtyStock.qty || 0), `${qtyStock.sku_count || 0} SKU(s)`, '', 'headphones'),
+      low_stock_items: () => kpiCard('Low stock items', String((d.low_stock || []).length), 'At or below threshold', (d.low_stock || []).length ? 'warn' : '', 'inventory_2'),
+      in_transit: () => kpiCard('In transit', String(d.in_transit || 0), 'Transfers on the way', '', 'local_shipping'),
+      open_repairs: () => kpiCard('Open repairs', String(d.open_repairs || 0), 'Active tickets', '', 'build'),
+      stuck_repairs: () => kpiCard('Stuck repairs', String(d.operations_snapshot?.stuck_repair_count || 0), `${d.repair_days || 3}+ days`, (d.operations_snapshot?.stuck_repair_count || 0) > 0 ? 'warn' : '', 'schedule'),
+      faulty_devices: () => kpiCard('Faulty devices', String(d.operations_snapshot?.faulty_device_count || 0), 'Awaiting resolution', '', 'phonelink_erase'),
+      repairs_today: () => kpiCard('Repairs completed today', String((d.today_repair_lines || []).length), 'Closed tickets', 'ok', 'task_alt'),
+      net_cash_today: () => kpiCard('Net cash today', money(d.today_cash_snapshot?.net || d.executive_snapshot?.cash_net_today || 0), 'In minus out', '', 'account_balance'),
+      receivables: () => kpiCard('Receivables', money(d.receivables), `${d.executive_snapshot?.receivable_party_count || 0} customers`, '', 'trending_up'),
+      payables: () => kpiCard('Payables', money(d.payables), `${d.executive_snapshot?.payable_party_count || 0} suppliers`, '', 'trending_down'),
+      pending_approvals: () => kpiCard('Pending approvals', String(d.pending_approvals || 0), 'Waiting for review', (d.pending_approvals || 0) > 0 ? 'warn' : '', 'approval'),
+      wholesale_today: () => kpiCard('Wholesale today', money(today.by_type?.wholesale?.net || 0), 'Wholesale channel', '', 'store'),
     };
     return builders[id] ? builders[id]() : '';
   }
@@ -1268,31 +1376,277 @@
     </div>`;
   }
 
-  function dashboardInsightsTeaser(d) {
-    if (!can('atoms_view_reports') || !homeShowTrends()) return '';
-    const hasTrend = (d.trend_lines || []).some((t) => t.invoices || t.net || t.collected);
-    const cash = d.today_cash_snapshot;
-    return `<div class="atoms-panel atoms-home-insights">
+  function dashboardChartsPanel(d) {
+    if (!can('atoms_view_reports')) return '';
+    const trend = d.trend_lines || [];
+    const mix = d.payment_mix_lines || [];
+    const types = d.sale_type_lines || [];
+    const hasAny = trend.some((t) => t.invoices || t.net) || mix.length || types.length;
+    return `<div class="atoms-panel atoms-home-charts">
       <div class="atoms-panel-head">
         <div class="atoms-panel-title-wrap">
           <span class="material-symbols-outlined atoms-panel-icon" aria-hidden="true">monitoring</span>
           <div>
-            <h2 class="atoms-panel-title">Trends snapshot</h2>
-            <p class="atoms-panel-sub">14-day performance — open Trends & charts for the full business desk.</p>
+            <h2 class="atoms-panel-title">Charts & trends</h2>
+            <p class="atoms-panel-sub">14-day sales, payment mix, and retail vs wholesale</p>
           </div>
         </div>
-        <a class="atoms-btn ghost sm" href="#/analytics"><span class="material-symbols-outlined">open_in_new</span> Open trends</a>
+        <a class="atoms-btn ghost sm" href="#/analytics"><span class="material-symbols-outlined">open_in_new</span> Full analytics</a>
       </div>
       <div class="atoms-panel-body">
-        ${cash ? `<div class="atoms-home-cash-strip">
+        ${hasAny ? `<div class="atoms-chart-grid">
+          <div class="atoms-chart-card">
+            <h3>Sales trend</h3>
+            ${lineChart(trend, 'net', 'date', 'Net sales')}
+          </div>
+          <div class="atoms-chart-card">
+            <h3>Payment mix</h3>
+            ${doughnutChart(mix, 'collected', 'method', 'Collected')}
+          </div>
+          <div class="atoms-chart-card">
+            <h3>Retail vs wholesale</h3>
+            ${barChart(types, 'net', 'label', 'Net by type')}
+          </div>
+        </div>` : '<p class="atoms-muted">No chart data yet — complete a few sales to populate trends.</p>'}
+      </div>
+    </div>`;
+  }
+
+  function dashboardInsightsTeaser(d) {
+    if (!can('atoms_view_reports') || !homeShowTrends()) return '';
+    const cash = d.today_cash_snapshot;
+    if (!cash) return '';
+    return `<div class="atoms-panel atoms-home-insights">
+      <div class="atoms-panel-head">
+        <div class="atoms-panel-title-wrap">
+          <span class="material-symbols-outlined atoms-panel-icon" aria-hidden="true">account_balance</span>
+          <div>
+            <h2 class="atoms-panel-title">Cash today</h2>
+            <p class="atoms-panel-sub">Inflows vs outflows for the selected branch</p>
+          </div>
+        </div>
+        <a class="atoms-btn ghost sm" href="#/reports"><span class="material-symbols-outlined">summarize</span> Reports</a>
+      </div>
+      <div class="atoms-panel-body">
+        <div class="atoms-home-cash-strip">
           <div><span class="atoms-muted">Cash in</span><strong>${money(cash.inflows || 0)}</strong></div>
           <div><span class="atoms-muted">Outflows</span><strong>${money(cash.outflows || 0)}</strong></div>
           <div><span class="atoms-muted">Net today</span><strong>${money(cash.net || 0)}</strong></div>
-        </div>` : ''}
-        ${hasTrend ? `<div class="atoms-home-chart">${barChart(d.trend_lines, 'net', 'date', 'Sales (14 days)')}</div>` : '<p class="atoms-muted">No sales trend data for this window yet.</p>'}
-        <p class="atoms-home-queue-foot"><a href="#/analytics">Business insights & snapshots</a> · <a href="#/reports">Download reports</a></p>
+        </div>
       </div>
     </div>`;
+  }
+
+  function canManagePricing() {
+    return can('atoms_manage_pricing') || can('atoms_manage_products');
+  }
+
+  function pricingTabs(active) {
+    const tabs = [
+      { id: 'pricing', label: 'Desk' },
+      { id: 'pricing-bulk', label: 'Bulk update' },
+      { id: 'pricing-import', label: 'Market import' },
+      { id: 'pricing-history', label: 'History' },
+    ];
+    return `<div class="atoms-home-queue-tabs" role="tablist" aria-label="Pricing sections">
+      ${tabs.map((t) => `<a class="atoms-btn ${t.id === active ? 'primary' : 'ghost'} sm" href="#/${t.id}" role="tab" aria-selected="${t.id === active ? 'true' : 'false'}">${escapeHtml(t.label)}</a>`).join('')}
+      ${can('atoms_approve') ? '<a class="atoms-btn ghost sm" href="#/approvals">Price approvals</a>' : ''}
+    </div>`;
+  }
+
+  function pricingChangeRows(changes, limit = 20) {
+    const rows = (changes || []).slice(0, limit);
+    if (!rows.length) return '<p class="atoms-muted">No price changes.</p>';
+    return `<div class="atoms-table-wrap"><table class="atoms-table">
+      <thead><tr><th>Product</th><th>From</th><th>To</th><th></th></tr></thead>
+      <tbody>${rows.map((c) => `<tr>
+        <td>${escapeHtml(c.name || c.sku || '')}${c.requires_approval ? ' <span class="atoms-badge warn">Approval</span>' : ''}</td>
+        <td class="atoms-table-mono">${money(c.from || 0)}</td>
+        <td class="atoms-table-mono"><strong>${money(c.to || 0)}</strong></td>
+        <td>${c.direction === 'up' ? '↑' : c.direction === 'down' ? '↓' : ''}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>${(changes || []).length > limit ? `<p class="atoms-muted">Showing ${limit} of ${changes.length}.</p>` : ''}`;
+  }
+
+  async function screenPricingDesk() {
+    const dash = await api('pricing/dashboard');
+    const current = await api('pricing/current?limit=40');
+    const items = current.items || [];
+    const pricePage = paginateList(items, 'pricing-current');
+    const recentPage = paginateList(dash.recent || [], 'pricing-recent');
+    return `
+      ${pageHeader('Price desk', 'React to market moves with controlled, auditable catalog pricing.', `
+        ${canManagePricing() ? '<a class="atoms-btn primary sm" href="#/pricing-bulk"><span class="material-symbols-outlined">price_change</span> Bulk update</a>' : ''}
+        ${canManagePricing() ? '<a class="atoms-btn ghost sm" href="#/pricing-import"><span class="material-symbols-outlined">upload_file</span> Import</a>' : ''}
+      `)}
+      ${pricingTabs('pricing')}
+      <div class="atoms-kpi-grid atoms-home-kpis" style="margin-top:16px">
+        ${kpiCard('Today’s changes', String(dash.today_changes || 0), 'Applied today', '', 'sell')}
+        ${kpiCard('Products updated', String(dash.products_updated || 0), 'Distinct SKUs', '', 'inventory_2')}
+        ${kpiCard('Upward', String(dash.upward || 0), 'Increases today', 'ok', 'trending_up')}
+        ${kpiCard('Downward', String(dash.downward || 0), 'Decreases today', (dash.downward || 0) ? 'warn' : '', 'trending_down')}
+        ${kpiCard('Pending approvals', String(dash.pending_approvals || 0), 'Large reductions', (dash.pending_approvals || 0) ? 'warn' : '', 'verified_user')}
+        ${kpiCard('Scheduled', String(dash.scheduled_pending || 0), 'Future activation', '', 'event')}
+      </div>
+      <section class="atoms-panel" style="margin-top:16px">
+        <header class="atoms-panel-head">
+          <div class="atoms-panel-title-wrap">
+            <span class="material-symbols-outlined atoms-panel-icon">list_alt</span>
+            <div>
+              <h2 class="atoms-panel-title">Current selling prices</h2>
+              <p class="atoms-panel-sub">Cost · Minimum · Current · Market. Reductions of ${escapeHtml(String(dash.reduction_threshold_pct || 10))}%+ need approval.</p>
+            </div>
+          </div>
+        </header>
+        <div class="atoms-panel-body">
+          <div class="atoms-table-wrap"><table class="atoms-table">
+            <thead><tr><th></th><th>Product</th><th>Cost</th><th>Minimum</th><th>Current</th><th>Market</th></tr></thead>
+            <tbody>
+              ${pricePage.items.length ? pricePage.items.map((p) => `<tr>
+                <td class="atoms-td-check"><input type="checkbox" class="js-price-pick" value="${p.id}" aria-label="Select ${escapeHtml(p.name)}"></td>
+                <td><strong>${escapeHtml(p.name)}</strong><div class="atoms-muted">${escapeHtml(p.sku || '')}${p.brand ? ` · ${escapeHtml(p.brand)}` : ''}</div></td>
+                <td class="atoms-table-mono">${money(p.default_cost_price || 0)}</td>
+                <td class="atoms-table-mono">${money(p.min_selling_price || 0)}</td>
+                <td class="atoms-table-mono"><strong>${money(p.current_selling_price || p.min_selling_price || 0)}</strong></td>
+                <td class="atoms-table-mono">${money(p.market_price || 0)}</td>
+              </tr>`).join('') : '<tr><td colspan="6" class="atoms-empty">No active products.</td></tr>'}
+            </tbody>
+          </table></div>
+          ${pagerBar(pricePage)}
+          <p class="atoms-muted" style="margin-top:10px">Select rows then open Bulk update to raise/lower them together.</p>
+        </div>
+      </section>
+      <section class="atoms-panel" style="margin-top:16px">
+        <header class="atoms-panel-head">
+          <div class="atoms-panel-title-wrap">
+            <span class="material-symbols-outlined atoms-panel-icon">history</span>
+            <div><h2 class="atoms-panel-title">Recent price changes</h2><p class="atoms-panel-sub">Latest applied catalog updates.</p></div>
+          </div>
+        </header>
+        <div class="atoms-panel-body">
+          ${pricingHistoryTable(recentPage.items)}
+          ${pagerBar(recentPage)}
+        </div>
+      </section>`;
+  }
+
+  function pricingHistoryTable(rows) {
+    if (!(rows || []).length) return '<p class="atoms-muted">No price history yet.</p>';
+    return `<div class="atoms-table-wrap"><table class="atoms-table">
+      <thead><tr><th>When</th><th>Product</th><th>Field</th><th>Old</th><th>New</th><th>By</th><th>Reason</th></tr></thead>
+      <tbody>${rows.map((r) => `<tr>
+        <td>${escapeHtml(String(r.created_at || '').replace('T', ' ').slice(0, 16))}</td>
+        <td>${escapeHtml(r.product_name || r.sku || ('#' + r.product_id))}</td>
+        <td>${escapeHtml(r.field || '')}</td>
+        <td class="atoms-table-mono">${money(r.old_price || 0)}</td>
+        <td class="atoms-table-mono"><strong>${money(r.new_price || 0)}</strong></td>
+        <td>${escapeHtml(r.created_by_name || '')}</td>
+        <td>${escapeHtml(r.reason || r.change_type || '')}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+  }
+
+  async function screenPricingBulk() {
+    const products = await api('products');
+    const brands = uniqueCatalogValues(products, 'brand');
+    const categories = uniqueCatalogValues(products, 'category');
+    const brandOpts = brands.map((b) => `<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`).join('');
+    const catOpts = categories.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    const branches = (state.bootstrap?.branches || []).map((b) => `<option value="${b.id}">${escapeHtml(b.name)}</option>`).join('');
+    return `
+      ${pageHeader('Bulk price update', 'Change current, minimum, market, or cost prices for many products in one action — by selection, brand, category, or recent inbound.', `
+        <a class="atoms-btn ghost sm" href="#/pricing">Back to desk</a>
+      `)}
+      ${pricingTabs('pricing-bulk')}
+      ${!canManagePricing() ? '<div class="atoms-flash warn">You can view pricing but need Pricing permission to apply changes.</div>' : ''}
+      <section class="atoms-panel" style="margin-top:16px">
+        <div class="atoms-panel-body">
+          <form class="atoms-form" id="pricing-bulk-form">
+            <div class="atoms-form-grid cols-3">
+              ${field('Which products', `<select id="px-scope">
+                <option value="selected">Selected rows on Price desk</option>
+                <option value="brand">One brand</option>
+                <option value="category">One category</option>
+                <option value="track">By tracking type</option>
+                <option value="recent_inbound">Received in last N days</option>
+                <option value="all">Entire active catalog</option>
+              </select>`)}
+              ${field('Brand', `<select id="px-brand"${brands.length ? '' : ' disabled'}><option value="">Choose brand</option>${brandOpts}</select>`)}
+              ${field('Category', `<select id="px-category"${categories.length ? '' : ' disabled'}><option value="">Choose category</option>${catOpts}</select>`)}
+            </div>
+            <div class="atoms-form-grid cols-3" style="margin-top:12px">
+              ${field('Price field', `<select id="px-field">
+                <option value="current">Current selling price</option>
+                <option value="min">Minimum selling price</option>
+                <option value="market">Market selling price</option>
+                <option value="cost">Cost price</option>
+              </select>`)}
+              ${field('How to change', `<select id="px-mode">
+                <option value="amount">Add or subtract ₦</option>
+                <option value="percent">Raise or lower by %</option>
+                <option value="set">Set every selected to ₦</option>
+              </select>`)}
+              ${field('Value', '<input id="px-value" type="number" step="0.01" placeholder="e.g. 5000, -3, or 780000">')}
+            </div>
+            <div class="atoms-form-grid cols-3" style="margin-top:12px">
+              ${field('Apply to', `<select id="px-apply">
+                <option value="both">Products and variants</option>
+                <option value="products">Products only</option>
+                <option value="variants">Variants only</option>
+              </select>`)}
+              ${field('Inbound days', '<input id="px-inbound-days" type="number" min="1" max="60" value="7">')}
+              ${field('Branch override (optional)', `<select id="px-branch"><option value="">All branches (catalog)</option>${branches}</select>`)}
+            </div>
+            <div class="atoms-form-grid cols-2" style="margin-top:12px">
+              ${field('Effective date (optional)', '<input id="px-effective" type="datetime-local">')}
+              ${field('Reason', '<input id="px-reason" type="text" placeholder="e.g. Market price increase" maxlength="200">')}
+            </div>
+            <p class="atoms-muted" style="margin-top:10px">Large reductions auto-queue for approval. Future effective dates schedule activation. Posted invoices are never rewritten.</p>
+            <div class="atoms-actions" style="margin-top:12px">
+              <button type="button" class="atoms-btn ghost" id="px-preview" ${canManagePricing() ? '' : 'disabled'}>Preview</button>
+              <button type="submit" class="atoms-btn primary" ${canManagePricing() ? '' : 'disabled'}>Apply update</button>
+            </div>
+          </form>
+          <div id="px-preview-box" class="atoms-bulk-preview hidden" style="margin-top:16px"></div>
+        </div>
+      </section>`;
+  }
+
+  async function screenPricingImport() {
+    return `
+      ${pageHeader('Market price import', 'Broadcast new market prices from a CSV — the fast path when management shares a price list.', '')}
+      ${pricingTabs('pricing-import')}
+      <section class="atoms-panel" style="margin-top:16px">
+        <div class="atoms-panel-body">
+          <p class="atoms-sub">CSV headers: <code>sku</code> (or <code>product_id</code>), then any of <code>current_price</code>, <code>market_price</code>, <code>min_price</code>, <code>cost_price</code>.</p>
+          <form class="atoms-form" id="pricing-import-form">
+            ${field('Default field when using a single Price column', `<select id="pi-field">
+              <option value="market">Market selling price</option>
+              <option value="current">Current selling price</option>
+              <option value="min">Minimum selling price</option>
+              <option value="cost">Cost price</option>
+            </select>`)}
+            ${field('Reason', '<input id="pi-reason" type="text" value="Market price broadcast" maxlength="200">')}
+            ${field('CSV', '<textarea id="pi-csv" rows="10" placeholder="sku,market_price\\ni14-pro,780000\\na55,420000"></textarea>')}
+            <div class="atoms-actions" style="margin-top:12px">
+              <button type="button" class="atoms-btn ghost" id="pi-preview" ${canManagePricing() ? '' : 'disabled'}>Preview</button>
+              <button type="submit" class="atoms-btn primary" ${canManagePricing() ? '' : 'disabled'}>Import prices</button>
+            </div>
+          </form>
+          <div id="pi-preview-box" class="atoms-bulk-preview hidden" style="margin-top:16px"></div>
+        </div>
+      </section>`;
+  }
+
+  async function screenPricingHistory() {
+    const hist = await api('pricing/history?limit=200');
+    const page = paginateList(hist.items || [], 'pricing-history');
+    return `
+      ${pageHeader('Price history', 'Every catalog price change is recorded with who, when, and why.', '')}
+      ${pricingTabs('pricing-history')}
+      <section class="atoms-panel" style="margin-top:16px">
+        <div class="atoms-panel-body">${pricingHistoryTable(page.items)}${pagerBar(page)}</div>
+      </section>`;
   }
 
   async function screenDashboard() {
@@ -1356,6 +1710,7 @@
       <div class="atoms-home-desk">
         ${dashboardPulseKpis(d, persona)}
         ${dashboardUserCustomizeBar(persona)}
+        ${dashboardChartsPanel(d)}
         ${quickActions ? `<div class="atoms-quick-actions">${quickActions}</div>` : ''}
         ${dashboardWorkQueuesPanel(d)}
         ${dashboardInsightsTeaser(d)}
@@ -1446,9 +1801,9 @@
     const product = (products || []).find((p) => Number(p.id) === Number(productId));
     const variants = product?.variants || [];
     if (!variants.length) {
-      return `<select id="${id}" disabled><option value="">Same as product</option></select>`;
+      return decorateSelectHtml(`<select id="${id}" disabled><option value="">Same as product</option></select>`);
     }
-    return `<select id="${id}">${variants.map((v) => `<option value="${v.id}"${String(v.id) === String(selectedId) ? ' selected' : ''} data-min="${(v.min_selling_price || 0) / 100}" data-cost="${(v.cost_price || 0) / 100}">${escapeHtml(v.label || v.variant_name || `${v.color || ''} ${v.storage || ''}`.trim())}</option>`).join('')}</select>`;
+    return decorateSelectHtml(`<select id="${id}">${variants.map((v) => `<option value="${v.id}"${String(v.id) === String(selectedId) ? ' selected' : ''} data-min="${(v.min_selling_price || 0) / 100}" data-cost="${(v.cost_price || 0) / 100}">${escapeHtml(v.label || v.variant_name || `${v.color || ''} ${v.storage || ''}`.trim())}</option>`).join('')}</select>`);
   }
 
   async function screenPos() {
@@ -1584,9 +1939,29 @@
     return 'IMEI';
   }
 
+  function uniqueCatalogValues(products, key) {
+    return [...new Set((products || []).map((p) => String(p[key] || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  }
+
+  function bulkPricePanel(products) {
+    if (!canManagePricing() || !(products || []).length) return '';
+    return `<section class="atoms-panel" id="bulk-price-panel">
+      <header class="atoms-panel-head">
+        <div class="atoms-panel-title-wrap">
+          <span class="material-symbols-outlined atoms-panel-icon">sell</span>
+          <div>
+            <h2 class="atoms-panel-title">Pricing &amp; price governance</h2>
+            <p class="atoms-panel-sub">Bulk updates, market imports, history, and approvals live on the Price desk — not one-by-one product edits.</p>
+          </div>
+        </div>
+        <a class="atoms-btn primary sm" href="#/pricing"><span class="material-symbols-outlined">open_in_new</span> Open Price desk</a>
+      </header>
+    </section>`;
+  }
+
   function catalogProductRows(products) {
     if (!(products || []).length) {
-      return '<tr><td colspan="6" class="atoms-empty">No products in the catalog yet. Add a model above.</td></tr>';
+      return '<tr><td colspan="7" class="atoms-empty">No products in the catalog yet. Add a model above.</td></tr>';
     }
     return products.map((p) => {
       const focused = Number(state.productFocusId) === Number(p.id);
@@ -1601,6 +1976,7 @@
         }).join('')
         : '<span class="atoms-muted">No colour / storage yet</span>';
       return `<tr class="atoms-catalog-row${focused ? ' is-focused' : ''}" id="prod-row-${p.id}">
+        <td class="atoms-td-check"><input type="checkbox" class="js-price-pick" value="${p.id}" aria-label="Select ${escapeHtml(p.name)}"></td>
         <td>
           <div class="atoms-catalog-name">${escapeHtml(p.name)}</div>
           <div class="atoms-catalog-meta"><span class="atoms-table-mono">${escapeHtml(p.sku || '—')}</span>${p.brand ? ` · ${escapeHtml(p.brand)}` : ''}</div>
@@ -1668,6 +2044,8 @@
               <div class="atoms-form-block-label">Pricing &amp; stock rules</div>
               <div class="atoms-form-grid cols-4">
                 ${field('Floor price (₦)', '<input id="pr-min" type="number" step="0.01" placeholder="0.00">')}
+                ${field('Current selling (₦)', '<input id="pr-current" type="number" step="0.01" placeholder="Default POS price">')}
+                ${field('Market price (₦)', '<input id="pr-market" type="number" step="0.01" placeholder="Management market">')}
                 ${field('Estimated cost (₦)', '<input id="pr-cost" type="number" step="0.01" placeholder="0.00">')}
                 ${field('Low-stock threshold', '<input id="pr-threshold" type="number" min="0" value="2" title="Alert when stock hits this count. 0 = off">')}
                 ${field('Warranty (days)', `<input id="pr-warranty" type="number" min="0" value="${warrantyDefault}">`)}
@@ -1689,6 +2067,7 @@
         </div>
       </section>` : '';
 
+    const catalogPage = paginateList(products, 'inventory-catalog');
     const catalogPanel = can('atoms_manage_products') && products.length ? `
       <section class="atoms-panel" id="catalog-panel">
         <header class="atoms-panel-head">
@@ -1704,6 +2083,7 @@
           <table class="atoms-table atoms-catalog-table">
             <thead>
               <tr>
+                <th class="atoms-td-check"><input type="checkbox" id="bp-select-all" title="Select all" aria-label="Select all products on this page"></th>
                 <th>Product</th>
                 <th>Category</th>
                 <th>Tracking</th>
@@ -1712,9 +2092,10 @@
                 <th></th>
               </tr>
             </thead>
-            <tbody>${catalogProductRows(products)}</tbody>
+            <tbody>${catalogProductRows(catalogPage.items)}</tbody>
           </table>
         </div>
+        ${pagerBar(catalogPage)}
         <div class="atoms-panel-body atoms-variant-form-wrap" id="variant-form-wrap">
           <form class="atoms-form" id="variant-form">
             <div class="atoms-form-block">
@@ -1750,10 +2131,11 @@
             <button type="button" role="tab" class="atoms-seg-tab js-inv-tab${defaultTab === 'accessories' ? ' is-active' : ''}" data-tab="accessories" aria-selected="${defaultTab === 'accessories'}">Accessories (${qtyStock.length})</button>
           </div>
         </header>
-        <div class="atoms-table-wrap" id="inv-panel-devices"${defaultTab !== 'devices' ? ' hidden' : ''}>${inventoryTable(deviceStock)}</div>
-        <div class="atoms-table-wrap" id="inv-panel-accessories"${defaultTab !== 'accessories' ? ' hidden' : ''}>${inventoryTable(qtyStock)}</div>
+        <div class="atoms-table-wrap" id="inv-panel-devices"${defaultTab !== 'devices' ? ' hidden' : ''}>${(() => { const p = paginateList(deviceStock, 'inventory-devices'); return inventoryTable(p.items) + pagerBar(p); })()}</div>
+        <div class="atoms-table-wrap" id="inv-panel-accessories"${defaultTab !== 'accessories' ? ' hidden' : ''}>${(() => { const p = paginateList(qtyStock, 'inventory-accessories'); return inventoryTable(p.items) + pagerBar(p); })()}</div>
       </section>`;
 
+    const archivedPage = paginateList(archived, 'inventory-archived');
     const archivedPanel = archived.length ? `
       <section class="atoms-panel">
         <header class="atoms-panel-head">
@@ -1769,7 +2151,7 @@
           <table class="atoms-table">
             <thead><tr><th>Product</th><th>SKU</th><th></th></tr></thead>
             <tbody>
-              ${archived.map((p) => `<tr>
+              ${archivedPage.items.map((p) => `<tr>
                 <td><strong>${escapeHtml(p.name)}</strong></td>
                 <td class="atoms-table-mono">${escapeHtml(p.sku || '—')}</td>
                 <td class="atoms-td-actions">
@@ -1779,6 +2161,7 @@
             </tbody>
           </table>
         </div>
+        ${pagerBar(archivedPage)}
       </section>` : '';
 
     return `
@@ -1792,6 +2175,7 @@
       ${lowOnly ? `<div class="atoms-flash warn" style="margin-bottom:16px">Showing <strong>low-stock</strong> items only (${deviceStock.length + qtyStock.length}). <a class="atoms-link" href="#/inventory">Show all stock</a></div>` : ''}
       <div class="atoms-inv-stack">
         ${productForm}
+        ${bulkPricePanel(products)}
         ${catalogPanel}
         ${stockPanel}
         ${archivedPanel}
@@ -1810,6 +2194,7 @@
     const desk = await api(`inbound/desk?branch_id=${state.branchId || ''}`);
     const tab = state.inboundTab || 'queue';
     const orders = desk.orders || [];
+    const inboundPage = paginateList(orders, 'inbound-queue');
     const suppliers = desk.suppliers || [];
     const products = desk.products || [];
     const importTypes = desk.import_types || [];
@@ -1829,7 +2214,7 @@
         <div class="atoms-table-toolbar"><strong>Open expected shipments</strong><span class="atoms-muted">Ordered or inspecting — units stay reserved until vault receives goods</span></div>
         <div class="atoms-table-wrap">
           <table class="atoms-table"><thead><tr><th>Reference</th><th>Supplier</th><th>Status</th><th>Units</th><th>Reserved</th><th>Expected</th><th></th></tr></thead><tbody>
-            ${orders.map((o) => `<tr>
+            ${inboundPage.items.map((o) => `<tr>
               <td><button type="button" class="atoms-link js-inbound-po" data-id="${o.id}"><span class="atoms-table-mono">${escapeHtml(o.invoice_number || ('PO-' + o.id))}</span></button></td>
               <td>${escapeHtml(o.supplier_name || '—')}</td>
               <td>${badge(o.status)}</td>
@@ -1840,6 +2225,7 @@
             </tr>`).join('') || '<tr><td colspan="7" class="atoms-empty">No open inbound shipments. Create an expected manifest below.</td></tr>'}
           </tbody></table>
         </div>
+        ${pagerBar(inboundPage)}
       </div>`;
     } else if (tab === 'shipment') {
       panel = `<div class="atoms-card">
@@ -1943,6 +2329,7 @@
     const products = await api('products');
     state._purchaseProducts = products;
     const suppliers = await api('suppliers');
+    const poPage = paginateList(list, 'purchases');
     return `
       ${pageShell({
         group: 'Stock & purchasing',
@@ -1986,7 +2373,7 @@
           </div>
           <div class="atoms-table-wrap">
             <table class="atoms-table"><thead><tr><th>PO Number</th><th>Supplier</th><th>Status</th><th>Actions</th></tr></thead><tbody>
-              ${list.map((p) => `<tr>
+              ${poPage.items.map((p) => `<tr>
                 <td><button type="button" class="atoms-link js-purchase-open" data-id="${p.id}"><span class="atoms-table-mono">${escapeHtml(p.invoice_number)}</span></button></td>
                 <td>${escapeHtml(p.supplier_name || 'Vendor')}</td>
                 <td>${badge(p.status)}</td>
@@ -2000,6 +2387,7 @@
               </tr>`).join('') || '<tr><td colspan="4" class="atoms-empty">No purchase orders created yet.</td></tr>'}
             </tbody></table>
           </div>
+          ${pagerBar(poPage)}
           <div style="padding:16px; border-top:1px solid var(--atoms-line);">
             <form class="atoms-form" id="imei-reg-form" style="display:none">
               <input type="hidden" id="reg-purchase-id">
@@ -2077,6 +2465,7 @@
       return screenTransferDesk(state.transferId);
     }
     const list = await api('transfers');
+    const transferPage = paginateList(list, 'transfers');
     return `
       ${pageShell({
         group: 'Stock & purchasing',
@@ -2113,7 +2502,7 @@
           </div>
           <div class="atoms-table-wrap">
             <table class="atoms-table"><thead><tr><th>Transfer ID & Route</th><th>Status & Devices</th><th>Actions</th></tr></thead><tbody>
-              ${(list || []).map((t) => `<tr>
+              ${transferPage.items.map((t) => `<tr>
                 <td><button type="button" class="atoms-link js-transfer-open" data-id="${t.id}"><strong>#TR-${t.id}</strong></button> <span style="color:#64748b; font-size:12px;">(${escapeHtml(t.from_branch_name || ('#' + t.from_branch_id))} → ${escapeHtml(t.to_branch_name || ('#' + t.to_branch_id))})</span></td>
                 <td>${badge(t.status)} <span style="font-size:12px; color:#64748b; margin-left:4px;">· <strong>${t.device_count || 0}</strong> unit(s)</span></td>
                 <td>
@@ -2126,6 +2515,7 @@
               </tr>`).join('') || '<tr><td colspan="3" class="atoms-empty">No inter-branch transfers active.</td></tr>'}
             </tbody></table>
           </div>
+          ${pagerBar(transferPage)}
         </div>
       </div>`;
   }
@@ -2162,11 +2552,13 @@
       return screenStockCountDesk(state.countId);
     }
     const list = await api(`stock-counts?branch_id=${state.branchId || ''}`);
+    const historyPage = paginateList(list, 'stocktake-history');
     const open = list.find((c) => c.status === 'open' || c.status === 'pending_approval');
     const current = open ? await api(`stock-counts/${open.id}`) : null;
     const lines = current?.lines || [];
     const deviceLines = lines.filter((l) => (l.track_mode || 'imei') !== 'quantity');
     const qtyLines = lines.filter((l) => (l.track_mode || '') === 'quantity');
+    const countPage = paginateList(deviceLines, 'stocktake-lines');
     return `
       ${pageShell({
         group: 'Stock & purchasing',
@@ -2251,7 +2643,7 @@
           </div>
           <div class="atoms-table-wrap">
             <table class="atoms-table"><thead><tr><th>Type</th><th>Identifier</th><th>Product Model</th><th>Specification</th><th>Expected</th><th>Counted</th><th>Variance</th></tr></thead><tbody>
-              ${deviceLines.map((l) => `<tr>
+              ${countPage.items.map((l) => `<tr>
                 <td><span class="atoms-badge">Device</span></td>
                 <td><span class="atoms-imei-pill">${escapeHtml(l.imei)}</span>${l.serial_number ? `<br><small style="color:#64748b;">SN: ${escapeHtml(l.serial_number)}</small>` : ''}</td>
                 <td><strong>${escapeHtml(l.product_name || '—')}</strong></td>
@@ -2272,6 +2664,7 @@
               ${lines.length ? '' : '<tr><td colspan="7" class="atoms-empty">No active stocktake session in progress.</td></tr>'}
             </tbody></table>
           </div>
+          ${pagerBar(countPage)}
           <div class="atoms-table-toolbar" style="border-top:1px solid var(--atoms-line);">
             <div style="font-size:14px; font-weight:700; display:flex; align-items:center; gap:8px;">
               <span class="material-symbols-outlined" style="color:var(--atoms-primary);">history</span>
@@ -2280,7 +2673,7 @@
           </div>
           <div class="atoms-table-wrap">
             <table class="atoms-table"><thead><tr><th>Session</th><th>Status</th><th>Missing Units</th><th>Date Posted</th><th></th></tr></thead><tbody>
-              ${list.map((c) => `<tr>
+              ${historyPage.items.map((c) => `<tr>
                 <td>${c.status === 'open'
                   ? `<button type="button" class="atoms-link js-count-resume" data-id="${c.id}"><strong>Resume #STK-${c.id}</strong></button>`
                   : `<button type="button" class="atoms-link js-count-open" data-id="${c.id}"><strong>#STK-${c.id}</strong></button>`}</td>
@@ -2291,6 +2684,7 @@
               </tr>`).join('') || '<tr><td colspan="5" class="atoms-empty">No past stock count sessions recorded.</td></tr>'}
             </tbody></table>
           </div>
+          ${pagerBar(historyPage)}
         </div>
       </div>`;
   }
@@ -2348,6 +2742,7 @@
       return screenReturnDesk(state.returnId);
     }
     const list = await api(`returns?branch_id=${state.branchId || ''}`);
+    const returnPage = paginateList(list, 'returns');
     return `
       ${pageShell({
         group: 'Daily operations',
@@ -2389,7 +2784,7 @@
           </div>
           <div class="atoms-table-wrap">
             <table class="atoms-table"><thead><tr><th>Date</th><th>Invoice</th><th>Device</th><th>Resolution</th></tr></thead><tbody>
-              ${(list || []).map((r) => `<tr>
+              ${returnPage.items.map((r) => `<tr>
                 <td>${escapeHtml(r.posted_at || '')}</td>
                 <td><button type="button" class="atoms-link js-return-open" data-id="${r.id}"><span class="atoms-table-mono">${escapeHtml(r.invoice_number || ('Return #' + r.id))}</span></button></td>
                 <td><span class="atoms-imei-pill">${escapeHtml(r.imei || '')}</span>${r.variant_label ? `<br><small style="color:#64748b;">${escapeHtml(r.product_name || '')} · ${escapeHtml(r.variant_label)}</small>` : (r.product_name ? `<br><small style="color:#64748b;">${escapeHtml(r.product_name)}</small>` : '')}</td>
@@ -2397,6 +2792,7 @@
               </tr>`).join('') || '<tr><td colspan="4" class="atoms-empty">No device returns recorded.</td></tr>'}
             </tbody></table>
           </div>
+          ${pagerBar(returnPage)}
         </div>
       </div>`;
   }
@@ -2445,6 +2841,7 @@
     const products = await api('products');
     state._swapProducts = products;
     const list = await api(`swaps?branch_id=${state.branchId || ''}`);
+    const swapPage = paginateList(list, 'swaps');
     const method = localStorage.getItem('atoms_pay_method') || 'cash';
     const payLabels = { cash: 'Cash', transfer: 'Transfer', pos: 'POS' };
     const methods = ['cash', 'transfer', 'pos']
@@ -2481,7 +2878,7 @@
         <div class="atoms-card">
           <h3>Recent swaps</h3>
           <table class="atoms-table"><thead><tr><th>Ticket</th><th>Customer</th><th>Trade-in</th><th>Shop phone</th><th>Difference</th></tr></thead><tbody>
-            ${(list || []).map((s) => `<tr>
+            ${swapPage.items.map((s) => `<tr>
               <td><button type="button" class="atoms-link js-swap-open" data-id="${s.id}">${escapeHtml(s.invoice_number || '')}</button></td>
               <td>${escapeHtml(s.customer_name || '—')}</td>
               <td>${escapeHtml(s.incoming_imei || '')}${s.incoming_variant_label ? `<br><span class="atoms-muted">${escapeHtml(s.incoming_product_name || '')} · ${escapeHtml(s.incoming_variant_label)}</span>` : (s.incoming_product_name ? `<br><span class="atoms-muted">${escapeHtml(s.incoming_product_name)}</span>` : '')}</td>
@@ -2489,6 +2886,7 @@
               <td>${escapeHtml(s.summary || money(s.difference))}</td>
             </tr>`).join('') || '<tr><td colspan="5">No swaps yet.</td></tr>'}
           </tbody></table>
+          ${pagerBar(swapPage)}
         </div>
       </div>`;
   }
@@ -2527,6 +2925,7 @@
     }
     const products = await api('products');
     const list = await api('repairs');
+    const repairPage = paginateList(list, 'repairs');
     const me = Number(state.bootstrap.user?.id || 0);
     const engineers = state.bootstrap.staff?.engineers?.length
       ? state.bootstrap.staff.engineers
@@ -2557,7 +2956,7 @@
         </div>
         <div class="atoms-card">
           <table class="atoms-table"><thead><tr><th>Ticket</th><th>Device</th><th>Engineer</th><th>Status</th><th></th></tr></thead><tbody>
-            ${list.map((r) => `<tr>
+            ${repairPage.items.map((r) => `<tr>
               <td><button type="button" class="atoms-link js-repair-open" data-id="${r.id}">${escapeHtml(r.ticket_number)}</button><br><span class="atoms-muted">${escapeHtml(r.imei || '')}</span></td>
               <td>${escapeHtml(r.product_name || '—')}${r.variant_label ? `<br><span class="atoms-muted">${escapeHtml(r.variant_label)}</span>` : ''}</td>
               <td>${escapeHtml(r.engineer_name || '—')}</td>
@@ -2571,6 +2970,7 @@
               </td>
             </tr>`).join('') || '<tr><td colspan="4">No open repairs.</td></tr>'}
           </tbody></table>
+          ${pagerBar(repairPage)}
         </div>
       </div>`;
   }
@@ -2617,6 +3017,7 @@
       return screenExpenseDesk(state.expenseId);
     }
     const list = await api('expenses');
+    const expensePage = paginateList(list, 'expenses');
     return `
       ${pageShell({
         group: 'Finance & accounts',
@@ -2637,7 +3038,7 @@
         </div>
         <div class="atoms-card">
           <table class="atoms-table"><thead><tr><th>When</th><th>Category</th><th>Vendor</th><th>Description</th><th>Branch</th><th>Amount</th><th>Status</th><th></th></tr></thead><tbody>
-            ${list.map((e) => `<tr>
+            ${expensePage.items.map((e) => `<tr>
               <td>${escapeHtml(e.posted_at || e.created_at || '')}</td>
               <td>${escapeHtml(e.category)}</td>
               <td>${escapeHtml(e.vendor || '—')}</td>
@@ -2648,6 +3049,7 @@
               <td><button type="button" class="atoms-link js-exp-open" data-id="${e.id}">Open</button></td>
             </tr>`).join('') || '<tr><td colspan="8">None</td></tr>'}
           </tbody></table>
+          ${pagerBar(expensePage)}
         </div>
       </div>`;
   }
@@ -2678,6 +3080,7 @@
       return screenSupplierDesk(state.supplierId);
     }
     const list = await api('suppliers');
+    const supplierPage = paginateList(list, 'suppliers');
     let archived = [];
     if (can('atoms_manage_suppliers')) {
       try { archived = await api('suppliers/archived'); } catch (e) { archived = []; }
@@ -2715,13 +3118,14 @@
         </div>
         <div class="atoms-card">
           <table class="atoms-table"><thead><tr><th>Supplier</th><th>Phone</th><th>Address</th><th>We owe</th></tr></thead><tbody>
-            ${list.map((s) => `<tr>
+            ${supplierPage.items.map((s) => `<tr>
               <td><button type="button" class="atoms-link js-sup-open" data-id="${s.id}">${escapeHtml(s.name)}</button></td>
               <td>${escapeHtml(s.phone || '')}</td>
               <td>${escapeHtml(s.address || '—')}</td>
               <td>${money(s.balance)}</td>
             </tr>`).join('') || '<tr><td colspan="4">No suppliers yet.</td></tr>'}
           </tbody></table>
+          ${pagerBar(supplierPage)}
         </div>
       </div>
       ${archived.length ? `<div class="atoms-card" style="margin-top:16px">
@@ -2735,6 +3139,9 @@
 
   async function screenSupplierDesk(id) {
     const s = await api(`suppliers/${id}`);
+    const supLedgerPage = paginateList(s.ledger || [], 'supplier-ledger');
+    const supPayPage = paginateList(s.payments || [], 'supplier-payments');
+    const supReturnPage = paginateList(s.returns || [], 'supplier-returns');
     return `
       ${pageShell({
         group: 'Stock & purchasing',
@@ -2771,7 +3178,7 @@
         <div class="atoms-card">
           <h3>Ledger</h3>
           <table class="atoms-table"><thead><tr><th>When</th><th>Event</th><th>Context</th><th>Debit</th><th>Credit</th><th>Balance</th></tr></thead><tbody>
-            ${(s.ledger || []).map((e) => `<tr>
+            ${supLedgerPage.items.map((e) => `<tr>
               <td>${escapeHtml(e.posted_at || '')}</td>
               <td>${escapeHtml(e.description || e.reference_type || '')}</td>
               <td>${e.context?.invoice_number ? `<button type="button" class="atoms-link js-sup-purchase" data-id="${e.reference_id}">${escapeHtml(e.context.invoice_number)}</button>` : ''}${e.context?.variant_summary ? `<br><span class="atoms-muted">${escapeHtml(e.context.variant_summary)}</span>` : ''}${e.context?.imei ? `<button type="button" class="atoms-link js-open-imei" data-imei="${escapeHtml(e.context.imei)}">${escapeHtml(e.context.imei)}</button>${e.context.variant_summary ? `<br><span class="atoms-muted">${escapeHtml(e.context.variant_summary)}</span>` : ''}` : ''}${!e.context ? '—' : ''}</td>
@@ -2780,6 +3187,7 @@
               <td>${money(e.balance_after)}</td>
             </tr>`).join('') || '<tr><td colspan="6">No ledger events.</td></tr>'}
           </tbody></table>
+          ${pagerBar(supLedgerPage)}
           ${(s.open_purchases || []).length ? `<h3 style="margin-top:20px">Open purchase orders</h3>
           <table class="atoms-table"><thead><tr><th>PO invoice</th><th>Variants</th><th>Amount</th><th>Age</th><th></th></tr></thead><tbody>
             ${s.open_purchases.map((p) => `<tr>
@@ -2792,16 +3200,17 @@
           </tbody></table>` : ''}
           <h3 style="margin-top:20px">Payments</h3>
           <table class="atoms-table"><thead><tr><th>When</th><th>Amount</th><th>Method</th><th>PO invoice</th></tr></thead><tbody>
-            ${(s.payments || []).map((p) => `<tr>
+            ${supPayPage.items.map((p) => `<tr>
               <td>${escapeHtml(p.posted_at || '')}</td>
               <td>${money(p.amount)}</td>
               <td>${escapeHtml(p.method || '')}</td>
               <td>${p.purchase_invoice ? `<button type="button" class="atoms-link js-sup-purchase" data-id="${p.purchase_id}">${escapeHtml(p.purchase_invoice)}</button>` : '—'}</td>
             </tr>`).join('') || '<tr><td colspan="4">No payments posted yet.</td></tr>'}
           </tbody></table>
+          ${pagerBar(supPayPage)}
           <h3 style="margin-top:20px">Devices returned</h3>
           <table class="atoms-table"><thead><tr><th>When</th><th>IMEI</th><th>Product</th><th>Variant</th><th>Credited</th></tr></thead><tbody>
-            ${(s.returns || []).map((r) => `<tr>
+            ${supReturnPage.items.map((r) => `<tr>
               <td>${escapeHtml(r.posted_at || '')}</td>
               <td><button type="button" class="atoms-link js-open-imei" data-imei="${escapeHtml(r.imei || '')}">${escapeHtml(r.imei || '—')}</button></td>
               <td>${escapeHtml(r.product_name || '')}</td>
@@ -2809,6 +3218,7 @@
               <td>${money(r.amount)}</td>
             </tr>`).join('') || '<tr><td colspan="5">No devices returned yet.</td></tr>'}
           </tbody></table>
+          ${pagerBar(supReturnPage)}
         </div>
       </div>`;
   }
@@ -2826,6 +3236,7 @@
         archived = Array.isArray(archivedRaw) ? archivedRaw : [];
       } catch (e) { archived = []; }
     }
+    const custPage = paginateList(list, 'customers');
     return `
       ${pageShell({
         group: 'Finance & accounts',
@@ -2868,7 +3279,7 @@
                 </tr>
               </thead>
               <tbody>
-                ${list.map((c) => {
+                ${custPage.items.map((c) => {
                   const initial = (c.name || 'C').charAt(0).toUpperCase();
                   const isDebt = Number(c.balance || 0) > 0;
                   return `<tr>
@@ -2885,6 +3296,7 @@
               </tbody>
             </table>
           </div>
+          ${pagerBar(custPage)}
         </div>
       </div>
       ${archived.length ? `<div class="atoms-card" style="margin-top:18px">
@@ -2927,6 +3339,9 @@
     }
     const canVoid = can('atoms_void');
     const canPay = can('atoms_create_payment');
+    const custInvPage = paginateList(c.invoices || [], 'customer-invoices');
+    const custPayPage = paginateList(c.payments || [], 'customer-payments');
+    const custLedgerPage = paginateList(c.ledger || [], 'customer-ledger');
     return `
       ${pageShell({
         group: 'Finance & accounts',
@@ -2955,7 +3370,7 @@
           </form>` : ''}
           <h3 style="margin-top:20px">Invoices</h3>
           <table class="atoms-table"><thead><tr><th>Invoice</th><th>Total</th><th>Due</th><th>Status</th><th></th></tr></thead><tbody>
-            ${(c.invoices || []).map((inv) => `<tr>
+            ${custInvPage.items.map((inv) => `<tr>
               <td><button type="button" class="atoms-link js-cust-invoice" data-inv="${escapeHtml(inv.invoice_number)}">${escapeHtml(inv.invoice_number)}</button></td>
               <td>${money(inv.total)}</td>
               <td>${money(inv.due_amount)}</td>
@@ -2963,9 +3378,10 @@
               <td>${canVoid && inv.status === 'completed' ? `<button type="button" class="atoms-btn danger js-void" data-id="${inv.id}">Void</button>` : ''}</td>
             </tr>`).join('') || '<tr><td colspan="5">No invoices.</td></tr>'}
           </tbody></table>
+          ${pagerBar(custInvPage)}
           <h3 style="margin-top:20px">Payments</h3>
           <table class="atoms-table"><thead><tr><th>When</th><th>Amount</th><th>Method</th><th>Invoice</th><th>Status</th></tr></thead><tbody>
-            ${(c.payments || []).map((p) => `<tr>
+            ${custPayPage.items.map((p) => `<tr>
               <td>${escapeHtml(p.posted_at || '')}</td>
               <td>${money(p.amount)}</td>
               <td>${escapeHtml(p.method || '')}</td>
@@ -2973,11 +3389,12 @@
               <td>${badge(p.status)}</td>
             </tr>`).join('') || '<tr><td colspan="5">No payments posted yet.</td></tr>'}
           </tbody></table>
+          ${pagerBar(custPayPage)}
         </div>
         <div class="atoms-card">
           <h3>Ledger</h3>
           <table class="atoms-table"><thead><tr><th>When</th><th>Event</th><th>Context</th><th>Debit</th><th>Credit</th><th>Balance</th></tr></thead><tbody>
-            ${(c.ledger || []).map((e) => `<tr>
+            ${custLedgerPage.items.map((e) => `<tr>
               <td>${escapeHtml(e.posted_at || '')}</td>
               <td>${escapeHtml(e.description || e.reference_type || '')}</td>
               <td>${e.context?.invoice_number ? `<button type="button" class="atoms-link js-cust-invoice" data-inv="${escapeHtml(e.context.invoice_number)}">${escapeHtml(e.context.invoice_number)}</button>` : '—'}${e.context?.device_summary ? `<br><span class="atoms-muted">${escapeHtml(e.context.device_summary)}</span>` : ''}</td>
@@ -2986,6 +3403,7 @@
               <td>${money(e.balance_after)}</td>
             </tr>`).join('') || '<tr><td colspan="6">No ledger events.</td></tr>'}
           </tbody></table>
+          ${pagerBar(custLedgerPage)}
         </div>
       </div>`;
   }
@@ -3009,6 +3427,21 @@
     const cash = pack.cash || {};
     const inv = pack.inventory || {};
     const imei = (pack.imei && !Array.isArray(pack.imei)) ? pack.imei : {};
+    const invoicePage = paginateList(sales.lines || [], 'report-invoices');
+    const deviceSoldPage = paginateList(saleDevices, 'report-devices');
+    const invProdPage = paginateList(inv.products || [], 'report-inv-products');
+    const recvPage = paginateList(pack.receivables?.parties || [], 'report-receivables');
+    const payPage = paginateList(pack.payables?.parties || [], 'report-payables');
+    const openInvPage = paginateList(pack.receivable_invoices || [], 'report-open-invoices');
+    const openPoPage = paginateList(pack.payable_purchases || [], 'report-open-pos');
+    const openRepairPage = paginateList(pack.open_repairs || [], 'report-open-repairs');
+    const faultyPage = paginateList(pack.faulty_devices || [], 'report-faulty');
+    const recentSalesPage = paginateList(pack.recent_sales || [], 'report-recent-sales');
+    const recentPayPage = paginateList(pack.recent_payments || [], 'report-recent-payments');
+    const recentReturnPage = paginateList(pack.recent_returns || [], 'report-recent-returns');
+    const pendingExpPage = paginateList(pack.pending_expenses || [], 'report-pending-expenses');
+    const wholesaleRecvPage = paginateList(pack.wholesale_receivables || [], 'report-wholesale-recv');
+    const retailRecvPage = paginateList(pack.retail_receivables || [], 'report-retail-recv');
     const presets = ['today', 'week', 'month', 'year'];
     const exports = [
       ['sales', 'Sales'],
@@ -3151,11 +3584,30 @@
         group: 'Money & reports',
         trail: 'Reports',
         title: 'Reports & exports',
-        subtitle: 'Sales, cash, inventory, and account balances for the period you choose. Download CSV files for accounting.',
-        actions: '<a class="atoms-back-btn" href="#/dashboard"><span class="material-symbols-outlined">arrow_back</span><span>Back to overview</span></a><button type="button" class="atoms-btn primary sm js-export" data-type="sales"><span class="material-symbols-outlined">download</span> Export sales</button><button type="button" class="atoms-btn ghost sm js-export" data-type="inventory_valuation"><span class="material-symbols-outlined">download</span> Stock value</button><button type="button" class="atoms-btn ghost sm js-copy-sheet" data-target="#report-invoices-wrap table"><span class="material-symbols-outlined">content_copy</span> Copy for Sheets</button>',
+        subtitle: 'Sales, cash, inventory, and account balances for the period you choose. Download as spreadsheet, PDF, or Word.',
+        actions: '<a class="atoms-back-btn" href="#/dashboard"><span class="material-symbols-outlined">arrow_back</span><span>Back to overview</span></a>',
       })}
       <div class="atoms-presets">
         ${presets.map((p) => `<button type="button" class="atoms-btn ${state.report.preset === p ? 'primary' : 'ghost'} sm js-rep-preset" data-preset="${p}">${p[0].toUpperCase() + p.slice(1)}</button>`).join('')}
+      </div>
+      <div class="atoms-card atoms-export-desk" style="margin-bottom:18px; padding:16px;">
+        <div class="atoms-pos-section-title" style="margin-bottom:12px">
+          <span class="material-symbols-outlined" style="color:var(--atoms-primary);">download</span>
+          <span>Download report</span>
+        </div>
+        <form class="atoms-form" id="report-export-form" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;align-items:end;">
+          ${field('Report', `<select id="rep-export-type">${exports.map(([v, l]) => `<option value="${v}"${v === 'sales' ? ' selected' : ''}>${escapeHtml(l)}</option>`).join('')}</select>`)}
+          ${field('Format', `<select id="rep-export-format">
+            <option value="csv">Spreadsheet (.csv / Sheets)</option>
+            <option value="pdf">PDF (print / save)</option>
+            <option value="docx">Word (.docx)</option>
+          </select>`)}
+          <div class="atoms-actions" style="margin:0;">
+            <button class="atoms-btn primary" type="submit"><span class="material-symbols-outlined">file_download</span> Download</button>
+            <button type="button" class="atoms-btn ghost js-copy-sheet" data-target="#report-invoices-wrap table"><span class="material-symbols-outlined">content_copy</span> Copy invoices</button>
+          </div>
+        </form>
+        <p class="atoms-muted" style="margin:10px 0 0">Uses the date range below. Spreadsheet opens in Excel or Google Sheets. PDF opens a print window — choose “Save as PDF”. Word downloads a .docx table.</p>
       </div>
       <div class="atoms-card" style="margin-bottom:18px; padding:16px;">
         <form class="atoms-form" id="report-form" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;align-items:end;">
@@ -3164,6 +3616,7 @@
           <div class="atoms-actions" style="margin:0;"><button class="atoms-btn primary" type="submit"><span class="material-symbols-outlined">refresh</span> Run Custom Range</button></div>
         </form>
       </div>
+      ${sales.reconciled === false ? `<div class="atoms-flash warn">Invoice lines (${money(sales.lines_total || 0)}) do not match net sales (${money(sales.net || 0)}). Recheck voids or filters.</div>` : ''}
       <div class="atoms-grid" style="margin:18px 0">
         <div class="atoms-card">
           <div class="atoms-card-top"><span class="atoms-card-label">Gross Revenue</span><div class="atoms-card-icon-badge indigo"><span class="material-symbols-outlined">trending_up</span></div></div>
@@ -3216,7 +3669,7 @@
           </div>
           <div class="atoms-table-wrap">
             <table class="atoms-table"><thead><tr><th>Invoice</th><th>Type</th><th>Customer</th><th>Total</th><th>Paid</th><th>Due</th><th></th></tr></thead><tbody>
-              ${(sales.lines || []).map((l) => `<tr>
+              ${invoicePage.items.map((l) => `<tr>
                 <td><button type="button" class="atoms-link js-invoice" data-inv="${escapeHtml(l.invoice_number)}">${escapeHtml(l.invoice_number)}</button></td>
                 <td>${badge(saleTypeLabel(l.sale_type))}</td>
                 <td>${escapeHtml(l.customer_name || 'Walk-in')}</td>
@@ -3227,6 +3680,7 @@
               </tr>`).join('') || '<tr><td colspan="7" class="atoms-empty">No sales recorded in this period.</td></tr>'}
             </tbody></table>
           </div>
+          ${pagerBar(invoicePage)}
           <div class="atoms-table-toolbar" style="border-top:1px solid var(--atoms-line);">
             <div style="font-size:14px; font-weight:700; display:flex; align-items:center; gap:8px;">
               <span class="material-symbols-outlined" style="color:var(--atoms-primary);">devices</span>
@@ -3235,7 +3689,7 @@
           </div>
           <div class="atoms-table-wrap">
             <table class="atoms-table"><thead><tr><th>Invoice</th><th>Salesperson</th><th>IMEI</th><th>Product</th><th>Variant</th><th>Selling Price</th></tr></thead><tbody>
-              ${saleDevices.map((l) => `<tr>
+              ${deviceSoldPage.items.map((l) => `<tr>
                 <td><button type="button" class="atoms-link js-invoice" data-inv="${escapeHtml(l.invoice_number)}">${escapeHtml(l.invoice_number)}</button></td>
                 <td>${escapeHtml(l.salesperson_name || '—')}</td>
                 <td><span class="atoms-imei-pill">${escapeHtml(l.imei || '')}</span></td>
@@ -3245,6 +3699,7 @@
               </tr>`).join('') || '<tr><td colspan="6" class="atoms-empty">No device items sold in this period.</td></tr>'}
             </tbody></table>
           </div>
+          ${pagerBar(deviceSoldPage)}
         </div>
         <div class="atoms-card">
           <h3>IMEI status</h3>
@@ -3273,29 +3728,32 @@
         <div class="atoms-card">
           <h3>Inventory by product</h3>
           <table class="atoms-table"><thead><tr><th>Product</th><th>Qty</th><th>Value</th></tr></thead><tbody>
-            ${(inv.products || []).map((p) => `<tr><td>${escapeHtml(p.name)}</td><td>${p.total}</td><td>${money(p.valuation)}</td></tr>`).join('') || '<tr><td colspan="3">No available stock.</td></tr>'}
+            ${invProdPage.items.map((p) => `<tr><td>${escapeHtml(p.name)}</td><td>${p.total}</td><td>${money(p.valuation)}</td></tr>`).join('') || '<tr><td colspan="3">No available stock.</td></tr>'}
           </tbody></table>
+          ${pagerBar(invProdPage)}
         </div>
       </div>
       <div class="atoms-row" style="margin-top:16px">
         <div class="atoms-card">
           <h3>Receivables ${money(pack.receivables?.total)}</h3>
           <table class="atoms-table"><thead><tr><th>Customer</th><th>Balance</th></tr></thead><tbody>
-            ${(pack.receivables?.parties || []).map((p) => `<tr><td>${escapeHtml(p.name || ('#' + p.party_id))}</td><td>${money(p.balance_after)}</td></tr>`).join('') || '<tr><td colspan="2">None</td></tr>'}
+            ${recvPage.items.map((p) => `<tr><td>${escapeHtml(p.name || ('#' + p.party_id))}</td><td>${money(p.balance_after)}</td></tr>`).join('') || '<tr><td colspan="2">None</td></tr>'}
           </tbody></table>
+          ${pagerBar(recvPage)}
         </div>
         <div class="atoms-card">
           <h3>Payables ${money(pack.payables?.total)}</h3>
           <table class="atoms-table"><thead><tr><th>Supplier</th><th>Balance</th></tr></thead><tbody>
-            ${(pack.payables?.parties || []).map((p) => `<tr><td>${escapeHtml(p.name || ('#' + p.party_id))}</td><td>${money(p.balance_after)}</td></tr>`).join('') || '<tr><td colspan="2">None</td></tr>'}
+            ${payPage.items.map((p) => `<tr><td>${escapeHtml(p.name || ('#' + p.party_id))}</td><td>${money(p.balance_after)}</td></tr>`).join('') || '<tr><td colspan="2">None</td></tr>'}
           </tbody></table>
+          ${pagerBar(payPage)}
         </div>
       </div>
       <div class="atoms-row" style="margin-top:16px">
         <div class="atoms-card">
           <h3>Open invoices (all branches)</h3>
           <table class="atoms-table"><thead><tr><th>Customer</th><th>Invoice</th><th>Devices</th><th>Due</th><th>Age</th></tr></thead><tbody>
-            ${(pack.receivable_invoices || []).map((l) => `<tr>
+            ${openInvPage.items.map((l) => `<tr>
               <td><button type="button" class="atoms-link js-aging-cust" data-id="${l.id}">${escapeHtml(l.name || '')}</button></td>
               <td>${escapeHtml(l.invoice_number || '')}</td>
               <td>${escapeHtml(l.device_summary || '—')}</td>
@@ -3303,13 +3761,14 @@
               <td>${l.days}d</td>
             </tr>`).join('') || '<tr><td colspan="5">No outstanding invoices.</td></tr>'}
           </tbody></table>
+          ${pagerBar(openInvPage)}
         </div>
       </div>
       <div class="atoms-row" style="margin-top:16px">
         <div class="atoms-card">
           <h3>Open purchase orders (all branches)</h3>
           <table class="atoms-table"><thead><tr><th>Supplier</th><th>PO invoice</th><th>Variants</th><th>Amount</th><th>Age</th></tr></thead><tbody>
-            ${(pack.payable_purchases || []).map((l) => `<tr>
+            ${openPoPage.items.map((l) => `<tr>
               <td><button type="button" class="atoms-link js-payable-sup" data-id="${l.id}">${escapeHtml(l.name || '')}</button></td>
               <td>${escapeHtml(l.invoice_number || '')}</td>
               <td>${escapeHtml(l.variant_summary || '—')}</td>
@@ -3317,11 +3776,12 @@
               <td>${l.days}d</td>
             </tr>`).join('') || '<tr><td colspan="5">No outstanding purchase orders.</td></tr>'}
           </tbody></table>
+          ${pagerBar(openPoPage)}
         </div>
         <div class="atoms-card">
           <h3>Open repairs (all branches)</h3>
           <table class="atoms-table"><thead><tr><th>Ticket</th><th>Customer</th><th>Device</th><th>Status</th><th>Engineer</th><th>Age</th></tr></thead><tbody>
-            ${(pack.open_repairs || []).map((l) => `<tr>
+            ${openRepairPage.items.map((l) => `<tr>
               <td>${escapeHtml(l.ticket_number || '')}</td>
               <td>${escapeHtml(l.customer_name || 'Walk-in')}</td>
               <td>${escapeHtml(l.device_summary || '—')}</td>
@@ -3330,16 +3790,18 @@
               <td>${l.days}d</td>
             </tr>`).join('') || '<tr><td colspan="6">No open repairs.</td></tr>'}
           </tbody></table>
+          ${pagerBar(openRepairPage)}
         </div>
         <div class="atoms-card">
           <h3>Faulty devices (all branches)</h3>
           <table class="atoms-table"><thead><tr><th>IMEI</th><th>Device</th><th>Age</th></tr></thead><tbody>
-            ${(pack.faulty_devices || []).map((l) => `<tr>
+            ${faultyPage.items.map((l) => `<tr>
               <td>${escapeHtml(l.imei || '')}</td>
               <td>${escapeHtml(l.device_summary || '—')}</td>
               <td>${l.days}d</td>
             </tr>`).join('') || '<tr><td colspan="3">No faulty devices waiting.</td></tr>'}
           </tbody></table>
+          ${pagerBar(faultyPage)}
         </div>
         <div class="atoms-card">
           <h3>Open stock counts (all branches)</h3>
@@ -3358,7 +3820,7 @@
         <div class="atoms-card">
           <h3>Recent returns (14 days)</h3>
           <table class="atoms-table"><thead><tr><th>Return</th><th>Invoice</th><th>Customer</th><th>Device</th><th>Type</th><th>Refund</th></tr></thead><tbody>
-            ${(pack.recent_returns || []).map((l) => `<tr>
+            ${recentReturnPage.items.map((l) => `<tr>
               <td>${escapeHtml('#' + l.id)}</td>
               <td>${escapeHtml(l.invoice_number || '')}</td>
               <td>${escapeHtml(l.customer_name || 'Walk-in')}</td>
@@ -3367,11 +3829,12 @@
               <td>${money(l.refund_amount)}</td>
             </tr>`).join('') || '<tr><td colspan="6">No returns in this window.</td></tr>'}
           </tbody></table>
+          ${pagerBar(recentReturnPage)}
         </div>
         <div class="atoms-card">
           <h3>Pending expenses</h3>
           <table class="atoms-table"><thead><tr><th>Expense</th><th>Branch</th><th>Category</th><th>Vendor</th><th>Amount</th><th>Age</th></tr></thead><tbody>
-            ${(pack.pending_expenses || []).map((l) => `<tr>
+            ${pendingExpPage.items.map((l) => `<tr>
               <td>${escapeHtml('#' + l.id)}</td>
               <td>${escapeHtml(l.branch_name || '')}</td>
               <td>${badge(l.category)}</td>
@@ -3380,11 +3843,12 @@
               <td>${l.days}d</td>
             </tr>`).join('') || '<tr><td colspan="6">No pending expenses.</td></tr>'}
           </tbody></table>
+          ${pagerBar(pendingExpPage)}
         </div>
         <div class="atoms-card">
           <h3>Open wholesale invoices</h3>
           <table class="atoms-table"><thead><tr><th>Customer</th><th>Invoice</th><th>Devices</th><th>Due</th><th>Age</th></tr></thead><tbody>
-            ${(pack.wholesale_receivables || []).map((l) => `<tr>
+            ${wholesaleRecvPage.items.map((l) => `<tr>
               <td>${escapeHtml(l.name || '')}</td>
               <td>${escapeHtml(l.invoice_number || '')}</td>
               <td>${escapeHtml(l.device_summary || '—')}</td>
@@ -3392,11 +3856,12 @@
               <td>${l.days}d</td>
             </tr>`).join('') || '<tr><td colspan="5">No open wholesale invoices.</td></tr>'}
           </tbody></table>
+          ${pagerBar(wholesaleRecvPage)}
         </div>
         <div class="atoms-card">
           <h3>Open retail invoices</h3>
           <table class="atoms-table"><thead><tr><th>Customer</th><th>Invoice</th><th>Devices</th><th>Due</th><th>Age</th></tr></thead><tbody>
-            ${(pack.retail_receivables || []).map((l) => `<tr>
+            ${retailRecvPage.items.map((l) => `<tr>
               <td>${escapeHtml(l.name || '')}</td>
               <td>${escapeHtml(l.invoice_number || '')}</td>
               <td>${escapeHtml(l.device_summary || '—')}</td>
@@ -3404,11 +3869,12 @@
               <td>${l.days}d</td>
             </tr>`).join('') || '<tr><td colspan="5">No open retail invoices.</td></tr>'}
           </tbody></table>
+          ${pagerBar(retailRecvPage)}
         </div>
         <div class="atoms-card">
           <h3>Recent sales (14 days)</h3>
           <table class="atoms-table"><thead><tr><th>Invoice</th><th>Type</th><th>Customer</th><th>Devices</th><th>Total</th><th>Due</th></tr></thead><tbody>
-            ${(pack.recent_sales || []).map((l) => `<tr>
+            ${recentSalesPage.items.map((l) => `<tr>
               <td>${escapeHtml(l.invoice_number || '')}</td>
               <td>${escapeHtml(l.sale_type_label || l.sale_type || 'Retail')}</td>
               <td>${escapeHtml(l.customer_name || 'Walk-in')}</td>
@@ -3417,11 +3883,12 @@
               <td>${money(l.due_amount)}</td>
             </tr>`).join('') || '<tr><td colspan="6">No sales in this window.</td></tr>'}
           </tbody></table>
+          ${pagerBar(recentSalesPage)}
         </div>
         <div class="atoms-card">
           <h3>Recent collections (14 days)</h3>
           <table class="atoms-table"><thead><tr><th>Customer</th><th>Invoice</th><th>Amount</th><th>Method</th><th>Status</th></tr></thead><tbody>
-            ${(pack.recent_payments || []).map((l) => `<tr>
+            ${recentPayPage.items.map((l) => `<tr>
               <td>${escapeHtml(l.customer_name || '')}</td>
               <td>${escapeHtml(l.invoice_number || '—')}</td>
               <td>${money(l.amount)}</td>
@@ -3429,6 +3896,7 @@
               <td>${badge(l.status)}</td>
             </tr>`).join('') || '<tr><td colspan="5">No collections in this window.</td></tr>'}
           </tbody></table>
+          ${pagerBar(recentPayPage)}
         </div>
         <div class="atoms-card">
           <h3>Recent supplier payments (14 days)</h3>
@@ -6277,77 +6745,137 @@
   }
 
   let chartCounter = 0;
+  const CHART_COLORS = ['#2F3590', '#10B981', '#F59E0B', '#EF4444', '#0EA5E9', '#8B5CF6', '#64748B'];
+
+  function mountChart(chartId, config) {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!window.Chart) return;
+        const el = document.getElementById(chartId);
+        if (!el) return;
+        const existing = window.Chart.getChart(el);
+        if (existing) existing.destroy();
+        new window.Chart(el.getContext('2d'), config);
+      });
+    });
+  }
+
+  function moneyTick(v) {
+    return '₦' + (v >= 1000000 ? (v / 1000000).toFixed(1) + 'M' : (v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v));
+  }
+
   function barChart(rows, key, labelKey, title = 'Net Sales (₦)') {
     if (!rows || !rows.length) return '<p class="atoms-muted">Nothing to chart yet.</p>';
     const chartId = `atoms-chart-${++chartCounter}`;
-    setTimeout(() => {
-      if (window.Chart) {
-        const el = document.getElementById(chartId);
-        if (el) {
-          const existing = window.Chart.getChart(el);
-          if (existing) existing.destroy();
-          const ctx = el.getContext('2d');
-          const labels = rows.map((r) => r[labelKey] || r.date || r.name || r.method || '');
-          const dataVals = rows.map((r) => Number(r[key] || 0) / 100);
-          new window.Chart(ctx, {
-            type: 'bar',
-            data: {
-              labels,
-              datasets: [{
-                label: title,
-                data: dataVals,
-                backgroundColor: 'rgba(79, 70, 229, 0.85)',
-                borderColor: '#4f46e5',
-                borderWidth: 1,
-                borderRadius: 6,
-                hoverBackgroundColor: '#4338ca',
-              }],
+    const labels = rows.map((r) => r[labelKey] || r.date || r.name || r.method || r.label || '');
+    const dataVals = rows.map((r) => Number(r[key] || 0) / 100);
+    mountChart(chartId, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: title,
+          data: dataVals,
+          backgroundColor: 'rgba(47, 53, 144, 0.85)',
+          borderColor: '#2F3590',
+          borderWidth: 1,
+          borderRadius: 6,
+          hoverBackgroundColor: '#252B78',
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => ' ₦' + Number(ctx.raw || 0).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
             },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                legend: { display: false },
-                tooltip: {
-                  callbacks: {
-                    label: (ctx) => ' ₦' + Number(ctx.raw || 0).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-                  },
-                },
-              },
-              scales: {
-                x: { grid: { display: false } },
-                y: {
-                  ticks: {
-                    callback: (v) => '₦' + (v >= 1000000 ? (v / 1000000).toFixed(1) + 'M' : (v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v)),
-                  },
-                  grid: { color: 'rgba(226, 232, 240, 0.6)' },
-                },
-              },
+          },
+        },
+        scales: {
+          x: { grid: { display: false } },
+          y: { ticks: { callback: moneyTick }, grid: { color: 'rgba(226, 232, 240, 0.6)' } },
+        },
+      },
+    });
+    return `<div class="atoms-chart-canvas"><canvas id="${chartId}"></canvas></div>`;
+  }
+
+  function lineChart(rows, key, labelKey, title = 'Net sales') {
+    if (!rows || !rows.length) return '<p class="atoms-muted">Nothing to chart yet.</p>';
+    const chartId = `atoms-chart-${++chartCounter}`;
+    const labels = rows.map((r) => {
+      const raw = String(r[labelKey] || r.date || '');
+      return raw.length >= 10 ? raw.slice(5) : raw;
+    });
+    const dataVals = rows.map((r) => Number(r[key] || 0) / 100);
+    mountChart(chartId, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: title,
+          data: dataVals,
+          borderColor: '#2F3590',
+          backgroundColor: 'rgba(47, 53, 144, 0.12)',
+          fill: true,
+          tension: 0.35,
+          pointRadius: 3,
+          pointBackgroundColor: '#2F3590',
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => ' ₦' + Number(ctx.raw || 0).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
             },
-          });
-        }
-      }
-    }, 60);
+          },
+        },
+        scales: {
+          x: { grid: { display: false } },
+          y: { ticks: { callback: moneyTick }, grid: { color: 'rgba(226, 232, 240, 0.6)' } },
+        },
+      },
+    });
+    return `<div class="atoms-chart-canvas"><canvas id="${chartId}"></canvas></div>`;
+  }
 
-    const vals = rows.map((r) => Number(r[key] || 0));
-    const max = Math.max(1, ...vals);
-    const w = 640;
-    const h = 180;
-    const gap = 4;
-    const bw = Math.max(6, (w / rows.length) - gap);
-    const bars = rows.map((r, i) => {
-      const v = Number(r[key] || 0);
-      const bh = Math.max(4, Math.round((v / max) * (h - 30)));
-      const x = i * (bw + gap);
-      const label = r[labelKey] || r.date || r.name || r.method || '';
-      return `<rect x="${x}" y="${h - bh}" width="${bw}" height="${bh}" rx="3" fill="#4f46e5"><title>${escapeHtml(String(label))}: ${money(v)}</title></rect>`;
-    }).join('');
-
-    return `
-      <div style="position:relative; height:180px; width:100%;">
-        <canvas id="${chartId}" style="width:100%; height:180px;"></canvas>
-      </div>
-    `;
+  function doughnutChart(rows, key, labelKey, title = 'Mix') {
+    if (!rows || !rows.length) return '<p class="atoms-muted">Nothing to chart yet.</p>';
+    const chartId = `atoms-chart-${++chartCounter}`;
+    const labels = rows.map((r) => r[labelKey] || r.method || r.name || '');
+    const dataVals = rows.map((r) => Number(r[key] || 0) / 100);
+    mountChart(chartId, {
+      type: 'doughnut',
+      data: {
+        labels,
+        datasets: [{
+          label: title,
+          data: dataVals,
+          backgroundColor: labels.map((_, i) => CHART_COLORS[i % CHART_COLORS.length]),
+          borderWidth: 0,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => ` ${ctx.label}: ₦` + Number(ctx.raw || 0).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+            },
+          },
+        },
+      },
+    });
+    return `<div class="atoms-chart-canvas atoms-chart-canvas-donut"><canvas id="${chartId}"></canvas></div>`;
   }
 
   function copyTableForSpreadsheet(btn, tableSelector) {
@@ -6452,13 +6980,16 @@
     if (can('atoms_manage_settings')) {
       try { outbox = await api('outbox'); } catch (_) { outbox = []; }
     }
-    const feed = items.length
-      ? items.map((n) => notifyAlertRow(n)).join('')
-      : `<div class="atoms-notify-empty">
+    const notifyPage = paginateList(items, 'notifications');
+    const feed = notifyPage.items.length
+      ? notifyPage.items.map((n) => notifyAlertRow(n)).join('')
+      : (items.length
+        ? ''
+        : `<div class="atoms-notify-empty">
           <span class="material-symbols-outlined" aria-hidden="true">notifications_off</span>
           <p>You're all caught up</p>
           <span class="atoms-muted">New alerts appear here for low stock, overdue payments, approvals, transfers, and repairs.</span>
-        </div>`;
+        </div>`);
     return `
       ${pageShell({
         group: 'Administration',
@@ -6469,10 +7000,10 @@
       })}
       <div class="atoms-notify-desk">
         <div class="atoms-kpi-grid atoms-notify-kpis">
-          ${kpiCard('Unread', String(unread), unread ? 'Needs attention' : 'All clear', unread ? 'warn' : 'ok')}
-          ${kpiCard('Today', String(todayCount), 'Alerts received today')}
-          ${kpiCard('Stock & transit', String(stockCount), 'Inventory movement')}
-          ${kpiCard('Approvals', String(approvalCount), 'Pending or reminded')}
+          ${kpiCard('Unread', String(unread), unread ? 'Needs attention' : 'All clear', unread ? 'warn' : 'ok', 'notifications')}
+          ${kpiCard('Today', String(todayCount), 'Alerts received today', '', 'today')}
+          ${kpiCard('Stock & transit', String(stockCount), 'Inventory movement', '', 'inventory')}
+          ${kpiCard('Approvals', String(approvalCount), 'Pending or reminded', '', 'approval')}
         </div>
         <div class="atoms-panel atoms-notify-panel">
           <div class="atoms-panel-head">
@@ -6493,6 +7024,7 @@
           </div>
           <div class="atoms-panel-body atoms-notify-feed" id="notify-feed">
             ${feed}
+            ${pagerBar(notifyPage)}
             <div class="atoms-notify-filter-empty hidden" id="notify-filter-empty">
               <span class="material-symbols-outlined" aria-hidden="true">filter_alt_off</span>
               <p>No alerts in this view</p>
@@ -6540,6 +7072,7 @@
     }
     const list = await api('approvals');
     const rows = Array.isArray(list) ? list : [];
+    const approvalPage = paginateList(rows, 'approvals');
     return `${pageShell({
       group: 'Administration',
       trail: 'Approvals',
@@ -6550,7 +7083,7 @@
       <div class="atoms-card">
         <div class="atoms-table-wrap">
         <table class="atoms-table"><thead><tr><th>#</th><th>Request</th><th>Summary</th><th>Devices</th><th>Who</th><th>Branch</th><th>When</th><th></th></tr></thead><tbody>
-          ${rows.map((a) => {
+          ${approvalPage.items.map((a) => {
             const details = approvalDeviceLines(a);
             return `<tr>
             <td><button type="button" class="atoms-link js-appr-open" data-id="${a.id}">${a.id}</button></td>
@@ -6567,6 +7100,7 @@
           }).join('') || '<tr><td colspan="8">Nothing waiting.</td></tr>'}
         </tbody></table>
         </div>
+        ${pagerBar(approvalPage)}
       </div>`;
   }
 
@@ -6639,12 +7173,13 @@
 
   async function screenSettings() {
     const users = await api('users');
+    const staffPage = paginateList(users, 'settings-staff');
     const branches = state.bootstrap.branches || [];
     const roles = state.bootstrap.staff_roles?.length ? state.bootstrap.staff_roles : await api('users/roles');
     const roleOpts = roles.map((r) => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.label)}</option>`).join('');
     const ops = await api('settings');
     const types = can('atoms_manage_settings') ? await api('import') : [];
-    const pwaUrl = ops.pwa_url || ATOMS.app || '';
+    const pwaUrl = ops.pwa_url || CFG.app || '';
     const last = ops.last_run;
     const lastLine = last?.ran_at
       ? `Last run ${escapeHtml(last.ran_at)} · ${Number(last.alerts || 0)} alert(s).`
@@ -6671,6 +7206,7 @@
           ${ops.whatsapp_token_set ? field('Remove saved token', '<label><input type="checkbox" id="ops-wa-token-clear"> Forget the stored API token</label>') : ''}
           ${field('Enable WhatsApp outbox', `<label><input type="checkbox" id="ops-wa-on" ${ops.whatsapp_enabled ? 'checked' : ''}> Queue messages when alerts fire</label>`)}
           ${field('Expense approval threshold (₦)', `<input id="ops-ex" type="number" value="${escapeHtml(ops.expense_threshold || 50000)}">`)}
+          ${field('Price reduction approval (%)', `<input id="ops-price-red" type="number" min="0" max="100" step="0.1" value="${escapeHtml(ops.price_reduction_approval_pct ?? 10)}">`)}
           ${field('Low-stock alerts', `<label><input type="checkbox" id="ops-low" ${ops.low_stock_notify ? 'checked' : ''}> Notify when devices or accessories hit the product threshold</label>`)}
           <h3>Automation</h3>
           <p class="atoms-muted">${lastLine}</p>
@@ -6711,7 +7247,7 @@
           <span class="material-symbols-outlined" style="color:var(--atoms-primary);">group_add</span>
           <span>Staff & branch access</span>
         </div>
-        <p class="atoms-sub">Create branch staff accounts, assign ATOMS roles, and control which locations each person can access.</p>
+        <p class="atoms-sub">Create branch staff accounts, assign staff roles, and control which locations each person can access.</p>
         <form class="atoms-form" id="staff-create-form" style="margin-bottom:20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">
           ${field('Full name', '<input id="st-name" required placeholder="e.g. Amina Bello">')}
           ${field('Username', '<input id="st-user" required placeholder="login name">')}
@@ -6725,7 +7261,7 @@
         </form>
         <div class="atoms-table-wrap">
         <table class="atoms-table"><thead><tr><th>User</th><th>Role</th><th>Branches</th><th>Access</th></tr></thead><tbody>
-          ${users.map((u) => `<tr>
+          ${staffPage.items.map((u) => `<tr>
             <td><strong>${escapeHtml(u.name)}</strong><br><span class="atoms-muted">${escapeHtml(u.username || u.email || '')}</span></td>
             <td>${escapeHtml(u.role_label || (u.roles || []).join(', '))}</td>
             <td>${(u.branches || []).map((b) => escapeHtml(b.name)).join(', ') || '<span class="atoms-muted">None</span>'}</td>
@@ -6738,6 +7274,7 @@
           </tr>`).join('')}
         </tbody></table>
         </div>
+        ${pagerBar(staffPage)}
       </div>`;
   }
 
@@ -6824,19 +7361,29 @@
             <td>${escapeHtml(a.ip_address || '—')}</td>
           </tr>`).join('') || '<tr><td colspan="6">No matching audit events.</td></tr>'}
         </tbody></table>
-        ${pages > 1 ? `<div class="atoms-actions" style="margin-top:12px">
-          <button type="button" class="atoms-btn ghost js-audit-page" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}>Previous</button>
-          <span class="atoms-muted">Page ${page} of ${pages}</span>
-          <button type="button" class="atoms-btn ghost js-audit-page" data-page="${page + 1}" ${page >= pages ? 'disabled' : ''}>Next</button>
-        </div>` : ''}
+        ${pagerBar({ key: 'audit', page, pages, per, total, start: total ? ((page - 1) * per) + 1 : 0, end: Math.min(total, page * per) })}
       </div>`;
   }
 
   function branchSelect(id) {
-    return `<select id="${id}">${(state.bootstrap.branches || []).map((b) => `<option value="${b.id}">${escapeHtml(b.name)}</option>`).join('')}</select>`;
+    return decorateSelectHtml(`<select id="${id}">${(state.bootstrap.branches || []).map((b) => `<option value="${b.id}">${escapeHtml(b.name)}</option>`).join('')}</select>`);
   }
 
   function bind() {
+    document.querySelectorAll('.js-pager').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const key = btn.dataset.pager || '';
+        const page = Number(btn.dataset.page || 1);
+        if (!key || btn.disabled) return;
+        if (key === 'audit') {
+          state.audit = { ...(state.audit || {}), page };
+        } else {
+          setPagerPage(key, page);
+        }
+        render({ force: true });
+      });
+    });
+
     document.querySelectorAll('.js-section-toggle').forEach((btn) => {
       btn.addEventListener('click', () => {
         const panel = btn.closest('.atoms-section-panel');
@@ -7018,6 +7565,7 @@
           whatsapp_token_clear: !!document.getElementById('ops-wa-token-clear')?.checked,
           whatsapp_enabled: document.getElementById('ops-wa-on').checked,
           expense_threshold: Number(document.getElementById('ops-ex').value || 0),
+          price_reduction_approval_pct: Number(document.getElementById('ops-price-red')?.value || 10),
           low_stock_notify: document.getElementById('ops-low').checked,
           automation_enabled: document.getElementById('ops-auto').checked,
           digest_enabled: document.getElementById('ops-digest').checked,
@@ -7096,6 +7644,8 @@
         category: document.getElementById('pr-category')?.value || 'Phone',
         track_mode: document.getElementById('pr-track')?.value || 'imei',
         min_selling_price: Number(document.getElementById('pr-min').value || 0),
+        current_selling_price: Number(document.getElementById('pr-current')?.value || document.getElementById('pr-min').value || 0),
+        market_price: Number(document.getElementById('pr-market')?.value || 0),
         low_stock_threshold: Number(document.getElementById('pr-threshold')?.value || 0),
         default_cost_price: Number(document.getElementById('pr-cost').value || 0),
         warranty_days: Number(document.getElementById('pr-warranty').value || 0),
@@ -7113,6 +7663,157 @@
       render();
     });
 
+    const readBulkPriceBody = (dryRun = false) => {
+      const scope = document.getElementById('bp-scope')?.value || 'selected';
+      const body = {
+        scope,
+        mode: document.getElementById('bp-mode')?.value || 'percent',
+        value: Number(document.getElementById('bp-value')?.value || 0),
+        apply_to: document.getElementById('bp-apply')?.value || 'both',
+        brand: document.getElementById('bp-brand')?.value || '',
+        category: document.getElementById('bp-category')?.value || '',
+        track_mode: document.getElementById('bp-track')?.value || 'imei',
+        product_ids: [...document.querySelectorAll('.js-price-pick:checked')].map((el) => Number(el.value)),
+        dry_run: dryRun,
+      };
+      return body;
+    };
+
+    const renderBulkPreview = (result) => {
+      const box = document.getElementById('bp-preview-box');
+      if (!box) return;
+      const changes = result.changes || [];
+      if (!changes.length) {
+        box.classList.remove('hidden');
+        box.innerHTML = '<p class="atoms-muted">No price changes for this selection.</p>';
+        return;
+      }
+      const rows = changes.slice(0, 12).map((c) => `
+        <tr>
+          <td>${escapeHtml(c.name || '')}</td>
+          <td class="atoms-table-mono">${money(c.from || 0)}</td>
+          <td class="atoms-table-mono"><strong>${money(c.to || 0)}</strong></td>
+        </tr>`).join('');
+      box.classList.remove('hidden');
+      box.innerHTML = `
+        <p><strong>${result.updated || 0}</strong> product floor(s)${result.variants_updated ? ` · <strong>${result.variants_updated}</strong> variant floor(s)` : ''}${result.dry_run ? ' (preview)' : ''}.</p>
+        <div class="atoms-table-wrap"><table class="atoms-table"><thead><tr><th>Product</th><th>From</th><th>To</th></tr></thead><tbody>${rows}</tbody></table></div>
+        ${changes.length > 12 ? `<p class="atoms-muted">Showing 12 of ${changes.length}.</p>` : ''}`;
+    };
+
+    document.getElementById('bp-select-all')?.addEventListener('change', (e) => {
+      document.querySelectorAll('.js-price-pick').forEach((el) => { el.checked = e.target.checked; });
+    });
+    document.getElementById('bp-preview')?.addEventListener('click', async () => {
+      const result = await api('products/prices/bulk', { method: 'POST', body: readBulkPriceBody(true) });
+      renderBulkPreview(result);
+    });
+    onSubmit('bulk-price-form', async () => {
+      const result = await api('products/prices/bulk', { method: 'POST', body: readBulkPriceBody(false) });
+      setFlash(`Updated ${result.updated || 0} product floor(s)${result.variants_updated ? ` and ${result.variants_updated} variant floor(s)` : ''}.`);
+      render();
+    });
+
+    const readPricingBulkBody = (dryRun = false) => ({
+      scope: document.getElementById('px-scope')?.value || 'selected',
+      field: document.getElementById('px-field')?.value || 'current',
+      mode: document.getElementById('px-mode')?.value || 'amount',
+      value: Number(document.getElementById('px-value')?.value || 0),
+      apply_to: document.getElementById('px-apply')?.value || 'both',
+      brand: document.getElementById('px-brand')?.value || '',
+      category: document.getElementById('px-category')?.value || '',
+      track_mode: document.getElementById('px-track')?.value || 'imei',
+      inbound_days: Number(document.getElementById('px-inbound-days')?.value || 7),
+      branch_id: document.getElementById('px-branch')?.value || '',
+      effective_at: document.getElementById('px-effective')?.value || '',
+      reason: document.getElementById('px-reason')?.value || '',
+      product_ids: (() => {
+        const live = [...document.querySelectorAll('.js-price-pick:checked')].map((el) => Number(el.value));
+        if (live.length) {
+          try { sessionStorage.setItem('atoms_price_picks', JSON.stringify(live)); } catch (e) {}
+          return live;
+        }
+        try {
+          const saved = JSON.parse(sessionStorage.getItem('atoms_price_picks') || '[]');
+          return Array.isArray(saved) ? saved.map(Number).filter(Boolean) : [];
+        } catch (e) {
+          return [];
+        }
+      })(),
+      dry_run: dryRun,
+    });
+
+    const showPricingResult = (boxId, result) => {
+      const box = document.getElementById(boxId);
+      if (!box) return;
+      box.classList.remove('hidden');
+      if (result.pending_approval) {
+        box.innerHTML = `<div class="atoms-flash warn">Queued for approval (#${result.approval_id}). ${escapeHtml(result.message || '')}</div>${pricingChangeRows(result.changes || [])}`;
+        return;
+      }
+      if (result.scheduled) {
+        box.innerHTML = `<div class="atoms-flash ok">Scheduled for ${escapeHtml(String(result.effective_at || ''))}.</div>${pricingChangeRows(result.changes || [])}`;
+        return;
+      }
+      box.innerHTML = `<p><strong>${result.updated || 0}</strong> product(s)${result.variants_updated ? ` · <strong>${result.variants_updated}</strong> variant(s)` : ''}${result.dry_run ? ' (preview)' : ' updated'} · field <strong>${escapeHtml(result.field || '')}</strong>${result.requires_approval ? ' · will need approval' : ''}.</p>${pricingChangeRows(result.changes || [])}`;
+    };
+
+    document.getElementById('px-preview')?.addEventListener('click', async () => {
+      const result = await api('pricing/bulk', { method: 'POST', body: readPricingBulkBody(true) });
+      showPricingResult('px-preview-box', result);
+    });
+    onSubmit('pricing-bulk-form', async () => {
+      const result = await api('pricing/bulk', { method: 'POST', body: readPricingBulkBody(false) });
+      if (result.pending_approval) {
+        setFlash('Large reduction sent for approval.');
+      } else if (result.scheduled) {
+        setFlash('Price update scheduled.');
+      } else {
+        setFlash(`Updated ${result.updated || 0} product price(s).`);
+      }
+      showPricingResult('px-preview-box', result);
+      if (!result.dry_run && !result.pending_approval && !result.scheduled) {
+        setTimeout(() => render(), 400);
+      }
+    });
+
+    document.getElementById('pi-preview')?.addEventListener('click', async () => {
+      const result = await api('pricing/import', {
+        method: 'POST',
+        body: {
+          csv: document.getElementById('pi-csv')?.value || '',
+          field: document.getElementById('pi-field')?.value || 'market',
+          reason: document.getElementById('pi-reason')?.value || '',
+          dry_run: true,
+        },
+      });
+      const box = document.getElementById('pi-preview-box');
+      if (box) {
+        box.classList.remove('hidden');
+        box.innerHTML = `<p><strong>${result.updated || 0}</strong> row(s)${result.dry_run ? ' (preview)' : ''}.${(result.errors || []).length ? ` ${result.errors.length} error(s).` : ''}</p>${pricingChangeRows(result.changes || [])}${(result.errors || []).length ? `<p class="atoms-muted">${escapeHtml((result.errors || []).slice(0, 5).join(' · '))}</p>` : ''}`;
+      }
+    });
+    onSubmit('pricing-import-form', async () => {
+      const result = await api('pricing/import', {
+        method: 'POST',
+        body: {
+          csv: document.getElementById('pi-csv')?.value || '',
+          field: document.getElementById('pi-field')?.value || 'market',
+          reason: document.getElementById('pi-reason')?.value || '',
+          dry_run: false,
+        },
+      });
+      setFlash(`Imported ${result.updated || 0} price row(s).`);
+      render();
+    });
+
+    document.querySelectorAll('.js-price-pick').forEach((el) => {
+      el.addEventListener('change', () => {
+        const ids = [...document.querySelectorAll('.js-price-pick:checked')].map((n) => Number(n.value));
+        try { sessionStorage.setItem('atoms_price_picks', JSON.stringify(ids)); } catch (e) {}
+      });
+    });
+
     document.querySelectorAll('.js-prod-edit').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const p = await api(`products/${btn.dataset.id}`);
@@ -7124,6 +7825,8 @@
         if (document.getElementById('pr-category')) document.getElementById('pr-category').value = p.category || 'Phone';
         if (document.getElementById('pr-track')) document.getElementById('pr-track').value = p.track_mode || 'imei';
         document.getElementById('pr-min').value = (p.min_selling_price || 0) / 100;
+        if (document.getElementById('pr-current')) document.getElementById('pr-current').value = (p.current_selling_price || p.min_selling_price || 0) / 100;
+        if (document.getElementById('pr-market')) document.getElementById('pr-market').value = (p.market_price || 0) / 100;
         document.getElementById('pr-threshold').value = p.low_stock_threshold ?? 2;
         document.getElementById('pr-cost').value = (p.default_cost_price || 0) / 100;
         document.getElementById('pr-warranty').value = p.warranty_days ?? 365;
@@ -8053,19 +8756,14 @@
     }));
 
     document.querySelectorAll('.js-export').forEach((btn) => btn.addEventListener('click', async () => {
-      const params = new URLSearchParams({
-        type: btn.dataset.type,
-        preset: state.report.preset || 'today',
-        from: state.report.from || '',
-        to: state.report.to || '',
-        branch_id: state.branchId || '',
-      });
-      const data = await api(`reports/export?${params}`);
-      downloadCsv(data.filename, data.csv);
-      setFlash(`Exported ${data.filename}.`);
-      document.getElementById('atoms-page').insertAdjacentHTML('afterbegin', flashHtml());
-      state.flash = null;
+      await downloadReport(btn.dataset.type || 'sales', 'csv');
     }));
+
+    onSubmit('report-export-form', async () => {
+      const type = document.getElementById('rep-export-type')?.value || 'sales';
+      const format = document.getElementById('rep-export-format')?.value || 'csv';
+      await downloadReport(type, format);
+    });
 
     bindInvoiceButtons(document);
 
@@ -8468,7 +9166,7 @@
       return;
     }
     const s = state.bootstrap?.settings || {};
-    const mark = (s.wordmark || s.company || 'ATOMS').trim();
+    const mark = (s.wordmark || s.company || 'Abu Twins Softskills Investment').trim();
     const accent = (s.wordmark_accent || '').trim();
     const el = document.querySelector('.atoms-wordmark');
     if (el) {
@@ -8533,8 +9231,8 @@
   function printInvoice(sale) {
     const s = state.bootstrap?.settings || {};
     const identity = {
-      company: (s.company || 'ATOMS').trim(),
-      wordmark: (s.wordmark || s.company || 'ATOMS').trim(),
+      company: (s.company || 'Abu Twins Softskills Investment').trim(),
+      wordmark: (s.wordmark || s.company || 'Abu Twins Softskills Investment').trim(),
       accent: (s.wordmark_accent || '').trim(),
       tagline: (s.tagline || '').trim(),
     };
@@ -8559,7 +9257,7 @@
         .sheet { max-width: 680px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.08); }
         .header { background: linear-gradient(135deg, #090d16 0%, #1e1b4b 100%); color: #ffffff; padding: 28px 32px; display: flex; justify-content: space-between; align-items: flex-start; }
         .brand-title { font-size: 24px; font-weight: 800; letter-spacing: -0.03em; margin: 0; color: #ffffff; }
-        .brand-accent { color: #818cf8; }
+        .brand-accent { color: #9AA1D4; }
         .brand-tag { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #a5b4fc; margin-top: 4px; font-weight: 700; }
         .inv-badge { text-align: right; }
         .inv-number { font-family: 'Roboto Mono', monospace; font-size: 16px; font-weight: 700; color: #ffffff; }
@@ -8643,7 +9341,7 @@
               1. Warranty covers genuine manufacturer hardware defects within the specified window.
               2. Physical damage, screen cracking, water contact, or unauthorized third-party repairs void all warranty claims.
               3. Please retain this original tax receipt for all warranty validations and trade-in valuations.
-              <br><small style="margin-top:4px; display:block; color:#94a3b8;">System generated official receipt · ATOMS Retail Operating System</small>
+              <br><small style="margin-top:4px; display:block; color:#94a3b8;">System generated official receipt · Abu Twins Invent</small>
             </div>
           </div>
         </div>
@@ -8668,6 +9366,52 @@
     a.download = filename || 'atoms-report.csv';
     a.click();
     URL.revokeObjectURL(a.href);
+  }
+
+  function downloadBase64(filename, base64, mime) {
+    const bin = atob(base64 || '');
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([bytes], { type: mime }));
+    a.download = filename || 'atoms-report.bin';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  async function downloadReport(type, format) {
+    const params = new URLSearchParams({
+      type: type || 'sales',
+      format: format || 'csv',
+      preset: state.report.preset || 'today',
+      from: state.report.from || '',
+      to: state.report.to || '',
+      branch_id: state.branchId || '',
+    });
+    const data = await api(`reports/export?${params}`);
+    if (data.format === 'docx' && data.base64) {
+      downloadBase64(
+        data.filename || 'atoms-report.docx',
+        data.base64,
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      );
+    } else if (data.format === 'pdf' && data.html) {
+      const w = window.open('', 'atoms-report-pdf');
+      if (!w) {
+        setFlash('Allow pop-ups to open the PDF print view.', 'warn');
+        document.getElementById('atoms-page')?.insertAdjacentHTML('afterbegin', flashHtml());
+        state.flash = null;
+        return;
+      }
+      w.document.write(data.html);
+      w.document.close();
+      w.focus();
+    } else {
+      downloadCsv(data.filename || 'atoms-report.csv', data.csv || '');
+    }
+    setFlash(`Exported ${data.filename || 'report'}.`);
+    document.getElementById('atoms-page')?.insertAdjacentHTML('afterbegin', flashHtml());
+    state.flash = null;
   }
 
   function onSubmit(id, handler) {
@@ -8864,7 +9608,7 @@
     } catch (err) {
       const pageEl = document.getElementById('atoms-page');
       if (pageEl) {
-        pageEl.innerHTML = `<div class="atoms-flash error">${escapeHtml(err.message)} Open ATOMS once while online so this device can cache the floor.</div>`;
+        pageEl.innerHTML = `<div class="atoms-flash error">${escapeHtml(err.message)} Open the app once while online so this device can cache the floor.</div>`;
       }
       syncOnline();
       return;
@@ -8969,8 +9713,8 @@
         if (e.data?.type === 'atoms-flush') flushQueue();
       });
     }
-    if (ATOMS.pwa && ATOMS.sw && 'serviceWorker' in navigator) {
-      navigator.serviceWorker.register(ATOMS.sw, { scope: '/atoms-app/' }).then(() => requestBackgroundSync()).catch(() => {});
+    if (CFG.pwa && CFG.sw && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.register(CFG.sw, { scope: '/atoms-app/' }).then(() => requestBackgroundSync()).catch(() => {});
     }
     document.addEventListener('keydown', (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {

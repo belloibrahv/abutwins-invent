@@ -39,7 +39,7 @@ final class SaleVoidPolicyTest extends TestCase
 
     public function test_debt_reminder_does_not_ask_to_edit_an_invoice(): void
     {
-        $text = (new DebtReminder())->text('Ada', 'ATOMS', '₦50,000.00');
+        $text = (new DebtReminder())->text('Ada', 'Abu Twins Softskills Investment', '₦50,000.00');
         $this->assertStringContainsString('Ada', $text);
         $this->assertStringContainsString('₦50,000.00', $text);
         $this->assertStringContainsString('does not change any posted invoice', $text);

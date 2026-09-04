@@ -21,7 +21,7 @@ final class StockLookupWidget extends \Elementor\Widget_Base
 
     public function get_title(): string
     {
-        return 'ATOMS Live Stock Checker';
+        return 'Live Stock Checker';
     }
 
     public function get_icon(): string
@@ -109,7 +109,7 @@ final class StockLookupWidget extends \Elementor\Widget_Base
             [
                 'label'     => 'Primary Accent Color',
                 'type'      => \Elementor\Controls_Manager::COLOR,
-                'default'   => '#4f46e5',
+                'default'   => '#2F3590',
                 'selectors' => [
                     '{{WRAPPER}} .atoms-fe-btn.primary' => 'background-color: {{VALUE}};',
                     '{{WRAPPER}} .atoms-fe-badge'       => 'color: {{VALUE}}; border-color: {{VALUE}};',

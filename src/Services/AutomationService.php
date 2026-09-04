@@ -26,6 +26,7 @@ final class AutomationService
             'stuck_transfers',
             'stuck_repairs',
             'return_escalation',
+            'price_schedules',
             'daily_digest',
         ];
     }
@@ -69,6 +70,7 @@ final class AutomationService
             'stuck_transfers'    => $this->notify->scanStuckTransfers($rules->clampHours((int) ($ops['transfer_hours'] ?? 24))),
             'stuck_repairs'      => $this->notify->scanStuckRepairs($rules->clampDays((int) ($ops['repair_days'] ?? 3))),
             'return_escalation'  => $this->notify->scanReturnEscalation($rules->clampDays((int) ($ops['return_days'] ?? 2))),
+            'price_schedules'    => (new PricingService())->activateDueSchedules(),
             'daily_digest'       => 0,
         ];
         if (!empty($ops['digest_enabled'])) {
@@ -123,7 +125,7 @@ final class AutomationService
         ]);
         $this->notify->push(
             'daily_digest',
-            'ATOMS daily digest',
+            'Abu Twins Invent daily digest',
             $body,
             ['reference_type' => 'digest', 'reference_id' => $key]
         );

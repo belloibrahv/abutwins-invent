@@ -6,6 +6,7 @@ namespace Atoms\Services;
 use Atoms\Domain\DomainException;
 use Atoms\Domain\LowStockPolicy;
 use Atoms\Domain\Money;
+use Atoms\Domain\PriceBulkUpdate;
 use Atoms\Domain\VariantLabel;
 use Atoms\Domain\VariantResolver;
 use Atoms\Domain\WarrantyPolicy;
@@ -34,6 +35,8 @@ final class ProductService
             'is_serialized'        => $this->isSerializedFromData($data),
             'track_mode'           => (new \Atoms\Domain\UnitValidator())->normalizeTrackMode((string) ($data['track_mode'] ?? $this->inferTrackMode($data))),
             'min_selling_price'    => Money::fromMajor($data['min_selling_price'] ?? 0)->minor(),
+            'current_selling_price'=> Money::fromMajor($data['current_selling_price'] ?? $data['min_selling_price'] ?? 0)->minor(),
+            'market_price'         => Money::fromMajor($data['market_price'] ?? 0)->minor(),
             'default_cost_price'   => Money::fromMajor($data['default_cost_price'] ?? 0)->minor(),
             'low_stock_threshold'  => (int) ($data['low_stock_threshold'] ?? 2),
             'warranty_days'        => $this->warrantyDays($data, $old),
@@ -155,6 +158,68 @@ final class ProductService
         $this->audit->log('product.restored', 'product', $id, ['is_active' => 0], ['is_active' => 1]);
 
         return $this->get($id);
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @return array{updated: int, variants_updated: int, dry_run: bool, changes: list<array<string, mixed>>}
+     */
+    public function bulkUpdatePrices(array $data): array
+    {
+        // Backward-compatible entry: inventory UI historically updated floors only.
+        if (!isset($data['field']) || $data['field'] === '' || $data['field'] === 'floor') {
+            $data['field'] = 'min';
+        }
+
+        return (new PricingService())->bulkUpdate($data);
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @return list<array<string, mixed>>
+     */
+    private function matchingForPriceUpdate(array $data): array
+    {
+        global $wpdb;
+        $policy = new PriceBulkUpdate();
+        $scope  = $policy->normalizeScope((string) ($data['scope'] ?? 'selected'));
+        $table  = $this->db->table('products');
+        $where  = ['is_active = 1'];
+        $params = [];
+
+        if ($scope === 'selected') {
+            $ids = array_values(array_unique(array_filter(array_map('intval', (array) ($data['product_ids'] ?? [])))));
+            if ($ids === []) {
+                throw new DomainException('Select one or more products, or choose a brand / category / tracking filter.');
+            }
+            $where[] = 'id IN (' . implode(',', array_fill(0, count($ids), '%d')) . ')';
+            $params  = array_merge($params, $ids);
+        } elseif ($scope === 'brand') {
+            $brand = sanitize_text_field((string) ($data['brand'] ?? ''));
+            if ($brand === '') {
+                throw new DomainException('Choose a brand for this bulk update.');
+            }
+            $where[]  = 'brand = %s';
+            $params[] = $brand;
+        } elseif ($scope === 'category') {
+            $category = sanitize_text_field((string) ($data['category'] ?? ''));
+            if ($category === '') {
+                throw new DomainException('Choose a category for this bulk update.');
+            }
+            $where[]  = 'category = %s';
+            $params[] = $category;
+        } elseif ($scope === 'track') {
+            $track = (new \Atoms\Domain\UnitValidator())->normalizeTrackMode((string) ($data['track_mode'] ?? ''));
+            $where[]  = 'track_mode = %s';
+            $params[] = $track;
+        }
+
+        $sql  = "SELECT * FROM {$table} WHERE " . implode(' AND ', $where) . ' ORDER BY name LIMIT 500';
+        $rows = $params
+            ? $wpdb->get_results($wpdb->prepare($sql, ...$params), ARRAY_A)
+            : $wpdb->get_results($sql, ARRAY_A);
+
+        return $this->withVariants($rows ?: [], true);
     }
 
     /**

@@ -22,7 +22,7 @@ done
 if ! wp core is-installed --allow-root; then
   wp core install \
     --url="http://localhost:8081" \
-    --title="ATOMS" \
+    --title="Abu Twins Invent" \
     --admin_user="admin" \
     --admin_password="admin" \
     --admin_email="admin@abutwins.local" \
@@ -34,5 +34,5 @@ wp plugin activate atoms --allow-root
 wp rewrite structure '/%postname%/' --allow-root
 wp rewrite flush --allow-root
 
-echo "ATOMS is ready at http://localhost:8081/wp-admin/admin.php?page=atoms"
+echo "Abu Twins Invent is ready at http://localhost:8081/wp-admin/admin.php?page=atoms"
 echo "Login: admin / admin"

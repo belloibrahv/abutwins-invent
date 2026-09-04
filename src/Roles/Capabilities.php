@@ -6,17 +6,17 @@ namespace Atoms\Roles;
 final class Capabilities
 {
     public const ROLES = [
-        'atoms_ceo'               => 'ATOMS CEO',
-        'atoms_director'          => 'ATOMS Director',
-        'atoms_auditor'           => 'ATOMS Auditor',
-        'atoms_accountant'        => 'ATOMS Accountant',
-        'atoms_branch_manager'    => 'ATOMS Branch Manager',
-        'atoms_vault_manager'     => 'ATOMS Vault Manager',
-        'atoms_cashier'           => 'ATOMS Cashier',
-        'atoms_sales_officer'     => 'ATOMS Sales Officer',
-        'atoms_engineer'             => 'ATOMS Engineer',
-        'atoms_inventory_officer'    => 'ATOMS Inventory Officer',
-        'atoms_inbound_coordinator'  => 'ATOMS Inbound Coordinator',
+        'atoms_ceo'               => 'CEO',
+        'atoms_director'          => 'Director',
+        'atoms_auditor'           => 'Auditor',
+        'atoms_accountant'        => 'Accountant',
+        'atoms_branch_manager'    => 'Branch Manager',
+        'atoms_vault_manager'     => 'Vault Manager',
+        'atoms_cashier'           => 'Cashier',
+        'atoms_sales_officer'     => 'Sales Officer',
+        'atoms_engineer'             => 'Engineer',
+        'atoms_inventory_officer'    => 'Inventory Officer',
+        'atoms_inbound_coordinator'  => 'Inbound Coordinator',
     ];
 
     /**
@@ -56,6 +56,7 @@ final class Capabilities
                 'atoms_manage_transfers',
                 'atoms_approve',
                 'atoms_manage_products',
+                'atoms_manage_pricing',
                 'atoms_manage_customers',
                 'atoms_manage_suppliers',
                 'atoms_manage_expenses',
@@ -139,6 +140,7 @@ final class Capabilities
             'atoms_approve',
             'atoms_approve_adjustments',
             'atoms_manage_products',
+            'atoms_manage_pricing',
             'atoms_manage_customers',
             'atoms_manage_suppliers',
             'atoms_manage_expenses',

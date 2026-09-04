@@ -1,4 +1,4 @@
-# ATOMS — Abu Twins Inventory & Operations Management System
+# Abu Twins Invent — Inventory & Operations Management System
 
 Enterprise WordPress plugin for multi-branch phone retail. Inventory, IMEI tracking, sales, returns, swaps, customer debts, transfers, repairs, expenses, audit, and reports.
 
@@ -10,9 +10,14 @@ Ready-to-use WordPress plugin zip:
 
 **[dist/abutwins-invent.zip](dist/abutwins-invent.zip)**
 
+Companion Elementor canvas theme (ThemeForest-style, works with Abu Twins Invent widgets):
+
+**[dist/abutwins-theme.zip](dist/abutwins-theme.zip)** — build with `make theme-release`
+
 1. In WordPress admin, go to **Plugins → Add New → Upload Plugin**
 2. Choose `abutwins-invent.zip` and click **Install Now**
-3. Activate **ATOMS — Inventory & Operations**
+3. Activate **Abu Twins Invent — Inventory & Operations**
+4. Upload and activate **Abu Twins Retail** theme, then Elementor / Elementor Pro for Theme Builder
 
 Requirements: WordPress 6.4+, PHP 8.1+
 
@@ -75,8 +80,8 @@ make smoke
 ## Staff setup
 
 1. In WordPress, create a user.
-2. Assign an ATOMS role (`ATOMS Cashier`, `ATOMS Vault Manager`, `ATOMS Engineer`, etc.).
-3. In ATOMS → Settings, attach that user to one or more branches.
+2. Assign a staff role (`Cashier`, `Vault Manager`, `Engineer`, etc.).
+3. In Abu Twins Invent → Settings, attach that user to one or more branches.
 
 ## API
 

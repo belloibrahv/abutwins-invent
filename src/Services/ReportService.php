@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Atoms\Services;
 
 use Atoms\Domain\CsvExporter;
+use Atoms\Domain\DocxExporter;
 use Atoms\Domain\DebtAging;
 use Atoms\Domain\DomainException;
 use Atoms\Domain\Performance;
@@ -189,20 +190,27 @@ final class ReportService
     }
 
     /**
-     * @return array{csv: string, filename: string}
+     * @return array{csv?: string, html?: string, base64?: string, filename: string, format: string, title?: string}
      */
-    public function export(string $type, string $from, string $to, ?int $branchId = null): array
+    public function export(string $type, string $from, string $to, ?int $branchId = null, string $format = 'csv'): array
     {
         $type = sanitize_key($type);
         if (!in_array($type, self::EXPORT_TYPES, true)) {
             throw new DomainException('Unknown report export.');
+        }
+        $format = sanitize_key($format);
+        if ($format === 'sheet' || $format === 'xlsx' || $format === 'xls') {
+            $format = 'csv';
+        }
+        if (!in_array($format, ['csv', 'pdf', 'docx'], true)) {
+            $format = 'csv';
         }
 
         $pack = $this->pack($from, $to, $branchId);
         $csv  = new CsvExporter();
         $stamp = $from === $to ? $from : $from . '_to_' . $to;
 
-        return match ($type) {
+        $result = match ($type) {
             'sales' => [
                 'filename' => 'atoms-sales-' . $stamp . '.csv',
                 'csv'      => $csv->toString(
@@ -2327,6 +2335,107 @@ final class ReportService
                 ),
             ],
         };
+
+        return $this->formatExport($result, $format, $type, $from, $to);
+    }
+
+    /**
+     * @param array{filename: string, csv: string} $result
+     * @return array{csv?: string, html?: string, base64?: string, filename: string, format: string, title?: string}
+     */
+    private function formatExport(array $result, string $format, string $type, string $from, string $to): array
+    {
+        $title = 'Abu Twins · ' . str_replace('_', ' ', $type) . ' · ' . ($from === $to ? $from : $from . ' to ' . $to);
+        $csv   = (string) ($result['csv'] ?? '');
+        $base  = (string) preg_replace('/\.csv$/i', '', (string) ($result['filename'] ?? 'atoms-report'));
+        [$headers, $rows] = $this->csvMatrix($csv);
+
+        if ($format === 'docx') {
+            $binary = (new DocxExporter())->fromTable($title, $headers, $rows);
+
+            return [
+                'format'   => 'docx',
+                'filename' => $base . '.docx',
+                'title'    => $title,
+                'base64'   => base64_encode($binary),
+            ];
+        }
+
+        if ($format === 'pdf') {
+            return [
+                'format'   => 'pdf',
+                'filename' => $base . '.pdf',
+                'title'    => $title,
+                'html'     => $this->exportHtml($title, $headers, $rows),
+            ];
+        }
+
+        return [
+            'format'   => 'csv',
+            'filename' => $base . '.csv',
+            'title'    => $title,
+            'csv'      => $csv,
+        ];
+    }
+
+    /**
+     * @return array{0: list<string>, 1: list<list<string>>}
+     */
+    private function csvMatrix(string $csv): array
+    {
+        $fh = fopen('php://temp', 'r+');
+        if ($fh === false) {
+            return [[], []];
+        }
+        fwrite($fh, $csv);
+        rewind($fh);
+        $headers = fgetcsv($fh) ?: [];
+        $headers = array_map(static fn($h) => (string) $h, $headers);
+        $rows    = [];
+        while (($cols = fgetcsv($fh)) !== false) {
+            if ($cols === [null]) {
+                continue;
+            }
+            $rows[] = array_map(static fn($c) => (string) ($c ?? ''), $cols);
+        }
+        fclose($fh);
+
+        return [$headers, $rows];
+    }
+
+    /**
+     * @param list<string>        $headers
+     * @param list<list<string>>  $rows
+     */
+    private function exportHtml(string $title, array $headers, array $rows): string
+    {
+        $th = '';
+        foreach ($headers as $h) {
+            $th .= '<th>' . esc_html($h) . '</th>';
+        }
+        $body = '';
+        foreach ($rows as $row) {
+            $body .= '<tr>';
+            foreach ($headers as $i => $_) {
+                $body .= '<td>' . esc_html((string) ($row[$i] ?? '')) . '</td>';
+            }
+            $body .= '</tr>';
+        }
+        if ($body === '') {
+            $body = '<tr><td colspan="' . max(1, count($headers)) . '">No rows in this period.</td></tr>';
+        }
+
+        return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' . esc_html($title) . '</title>'
+            . '<style>body{font-family:system-ui,sans-serif;color:#0f172a;padding:24px}'
+            . 'h1{font-size:18px;margin:0 0 8px}p{color:#64748b;margin:0 0 16px;font-size:12px}'
+            . 'table{width:100%;border-collapse:collapse;font-size:12px}'
+            . 'th,td{border:1px solid #e2e8f0;padding:6px 8px;text-align:left}'
+            . 'th{background:#f8fafc}@media print{body{padding:0}}</style></head><body>'
+            . '<h1>' . esc_html($title) . '</h1>'
+            . '<p>Abu Twins Invent · print or Save as PDF</p>'
+            . '<table><thead><tr>' . $th . '</tr></thead><tbody>' . $body . '</tbody></table>'
+            . '<script>window.onload=function(){window.print();}</script>'
+            . '</body></html>';
     }
 
     /**
@@ -2338,14 +2447,15 @@ final class ReportService
         $sales     = $this->db->table('sales');
         $returns   = $this->db->table('returns');
         $customers = $this->db->table('customers');
-        $where     = "s.status = 'completed' AND s.posted_at >= %s AND s.posted_at < %s";
-        $params    = [$from . ' 00:00:00', $to . ' 23:59:59'];
+        [$start, $end] = $this->periodBounds($from, $to);
+        $where  = "s.status = 'completed' AND s.posted_at >= %s AND s.posted_at <= %s";
+        $params = [$start, $end];
         if ($branchId) {
             $where   .= ' AND s.branch_id = %d';
             $params[] = $branchId;
         }
 
-        $row = $wpdb->get_row(
+        $totals = $wpdb->get_row(
             $wpdb->prepare(
                 "SELECT COUNT(*) AS invoices, COALESCE(SUM(s.subtotal),0) AS gross, COALESCE(SUM(s.discount),0) AS discounts,
                         COALESCE(SUM(s.total),0) AS net, COALESCE(SUM(s.paid_amount),0) AS collected, COALESCE(SUM(s.due_amount),0) AS receivables
@@ -2355,8 +2465,8 @@ final class ReportService
             ARRAY_A
         ) ?: [];
 
-        $retWhere  = "status = 'completed' AND posted_at >= %s AND posted_at < %s";
-        $retParams = [$from . ' 00:00:00', $to . ' 23:59:59'];
+        $retWhere  = "status = 'completed' AND posted_at >= %s AND posted_at <= %s";
+        $retParams = [$start, $end];
         if ($branchId) {
             $retWhere   .= ' AND branch_id = %d';
             $retParams[] = $branchId;
@@ -2364,7 +2474,7 @@ final class ReportService
         $refunded = (int) $wpdb->get_var($wpdb->prepare("SELECT COALESCE(SUM(refund_amount),0) FROM {$returns} WHERE {$retWhere}", ...$retParams));
 
         $cost   = $this->cogs($from, $to, $branchId);
-        $net    = (int) ($row['net'] ?? 0);
+        $net    = (int) ($totals['net'] ?? 0);
         $profit = $net - $cost - $refunded;
 
         $invoices = $wpdb->get_results(
@@ -2395,27 +2505,34 @@ final class ReportService
             WholesalePolicy::RETAIL    => ['invoices' => 0, 'net' => 0],
             WholesalePolicy::WHOLESALE => ['invoices' => 0, 'net' => 0],
         ];
-        foreach ($byTypeRows as $row) {
-            $key = $policy->normalize((string) ($row['sale_type'] ?? ''));
-            $byType[$key]['invoices'] += (int) ($row['invoices'] ?? 0);
-            $byType[$key]['net']      += (int) ($row['net'] ?? 0);
+        foreach ($byTypeRows as $typeRow) {
+            $key = $policy->normalize((string) ($typeRow['sale_type'] ?? ''));
+            $byType[$key]['invoices'] += (int) ($typeRow['invoices'] ?? 0);
+            $byType[$key]['net']      += (int) ($typeRow['net'] ?? 0);
+        }
+
+        $linesTotal = 0;
+        foreach ($invoices as $line) {
+            $linesTotal += (int) ($line['total'] ?? 0);
         }
 
         return [
-            'from'        => $from,
-            'to'          => $to,
-            'branch_id'   => $branchId,
-            'invoices'    => (int) ($row['invoices'] ?? 0),
-            'gross'       => (int) ($row['gross'] ?? 0),
-            'discounts'   => (int) ($row['discounts'] ?? 0),
-            'net'         => $net,
-            'collected'   => (int) ($row['collected'] ?? 0),
-            'receivables' => (int) ($row['receivables'] ?? 0),
-            'returns'     => $refunded,
-            'cogs'        => $cost,
-            'profit'      => $profit,
-            'by_type'     => $byType,
-            'lines'       => $invoices,
+            'from'         => $from,
+            'to'           => $to,
+            'branch_id'    => $branchId,
+            'invoices'     => (int) ($totals['invoices'] ?? 0),
+            'gross'        => (int) ($totals['gross'] ?? 0),
+            'discounts'    => (int) ($totals['discounts'] ?? 0),
+            'net'          => $net,
+            'collected'    => (int) ($totals['collected'] ?? 0),
+            'receivables'  => (int) ($totals['receivables'] ?? 0),
+            'returns'      => $refunded,
+            'cogs'         => $cost,
+            'profit'       => $profit,
+            'by_type'      => $byType,
+            'lines'        => $invoices,
+            'lines_total'  => $linesTotal,
+            'reconciled'   => $linesTotal === $net,
         ];
     }
 
@@ -2431,8 +2548,9 @@ final class ReportService
         $products  = $this->db->table('products');
         $variants  = $this->db->table('product_variants');
         $customers = $this->db->table('customers');
-        $where     = "s.status = 'completed' AND s.posted_at >= %s AND s.posted_at < %s";
-        $params    = [$from . ' 00:00:00', $to . ' 23:59:59'];
+        [$start, $end] = $this->periodBounds($from, $to);
+        $where     = "s.status = 'completed' AND s.posted_at >= %s AND s.posted_at <= %s";
+        $params    = [$start, $end];
         if ($branchId) {
             $where   .= ' AND s.branch_id = %d';
             $params[] = $branchId;
@@ -4920,14 +5038,13 @@ final class ReportService
     public function cash(string $from, string $to, ?int $branchId = null): array
     {
         global $wpdb;
-        $start = $from . ' 00:00:00';
-        $end   = $to . ' 23:59:59';
+        [$start, $end] = $this->periodBounds($from, $to);
 
         $atSale = $this->sumByMethod(
             $this->db->table('sales'),
             'payment_method',
             'paid_amount',
-            "status = 'completed' AND posted_at >= %s AND posted_at < %s",
+            "status = 'completed' AND posted_at >= %s AND posted_at <= %s",
             $start,
             $end,
             $branchId
@@ -4936,13 +5053,13 @@ final class ReportService
             $this->db->table('payments'),
             'method',
             'amount',
-            "status = 'posted' AND posted_at >= %s AND posted_at < %s AND (notes IS NULL OR notes NOT LIKE 'Payment at sale%%')",
+            "status = 'posted' AND posted_at >= %s AND posted_at <= %s AND (notes IS NULL OR notes NOT LIKE 'Payment at sale%%')",
             $start,
             $end,
             $branchId
         );
 
-        $expWhere  = "status = 'posted' AND posted_at >= %s AND posted_at < %s";
+        $expWhere  = "status = 'posted' AND posted_at >= %s AND posted_at <= %s";
         $expParams = [$start, $end];
         if ($branchId) {
             $expWhere   .= ' AND branch_id = %d';
@@ -4950,7 +5067,7 @@ final class ReportService
         }
         $expenses = (int) $wpdb->get_var($wpdb->prepare('SELECT COALESCE(SUM(amount),0) FROM ' . $this->db->table('expenses') . " WHERE {$expWhere}", ...$expParams));
 
-        $supWhere  = "status = 'posted' AND posted_at >= %s AND posted_at < %s";
+        $supWhere  = "status = 'posted' AND posted_at >= %s AND posted_at <= %s";
         $supParams = [$start, $end];
         if ($branchId) {
             $supWhere   .= ' AND branch_id = %d';
@@ -4958,7 +5075,7 @@ final class ReportService
         }
         $supplierPay = (int) $wpdb->get_var($wpdb->prepare('SELECT COALESCE(SUM(amount),0) FROM ' . $this->db->table('supplier_payments') . " WHERE {$supWhere}", ...$supParams));
 
-        $retWhere  = "status = 'completed' AND posted_at >= %s AND posted_at < %s";
+        $retWhere  = "status = 'completed' AND posted_at >= %s AND posted_at <= %s";
         $retParams = [$start, $end];
         if ($branchId) {
             $retWhere   .= ' AND branch_id = %d';
@@ -5406,7 +5523,7 @@ final class ReportService
 
         $profit = $wpdb->get_results(
             $wpdb->prepare(
-                "SELECT s.branch_id, COALESCE(SUM(si.selling_price - si.cost_price),0) AS profit
+                "SELECT s.branch_id, COALESCE(SUM((si.selling_price - si.cost_price) * GREATEST(COALESCE(si.quantity, 1), 1)),0) AS profit
                  FROM {$items} si
                  INNER JOIN {$sales} s ON s.id = si.sale_id
                  WHERE s.status = 'completed' AND s.posted_at >= %s AND s.posted_at <= %s
@@ -5467,7 +5584,7 @@ final class ReportService
         ) ?: [];
         $profit = $wpdb->get_results(
             $wpdb->prepare(
-                "SELECT s.salesperson_id AS id, COALESCE(SUM(si.selling_price - si.cost_price),0) AS profit
+                "SELECT s.salesperson_id AS id, COALESCE(SUM((si.selling_price - si.cost_price) * GREATEST(COALESCE(si.quantity, 1), 1)),0) AS profit
                  FROM {$items} si INNER JOIN {$sales} s ON s.id = si.sale_id
                  WHERE {$where} GROUP BY s.salesperson_id",
                 ...$params
@@ -5495,8 +5612,9 @@ final class ReportService
         global $wpdb;
         $items  = $this->db->table('sale_items');
         $sales  = $this->db->table('sales');
-        $where  = "s.status = 'completed' AND s.posted_at >= %s AND s.posted_at < %s";
-        $params = [$from . ' 00:00:00', $to . ' 23:59:59'];
+        [$start, $end] = $this->periodBounds($from, $to);
+        $where  = "s.status = 'completed' AND s.posted_at >= %s AND s.posted_at <= %s";
+        $params = [$start, $end];
         if ($branchId) {
             $where   .= ' AND s.branch_id = %d';
             $params[] = $branchId;
@@ -5504,10 +5622,28 @@ final class ReportService
 
         return (int) $wpdb->get_var(
             $wpdb->prepare(
-                "SELECT COALESCE(SUM(si.cost_price),0) FROM {$items} si INNER JOIN {$sales} s ON s.id = si.sale_id WHERE {$where}",
+                "SELECT COALESCE(SUM({$this->lineCostSql()}),0) FROM {$items} si INNER JOIN {$sales} s ON s.id = si.sale_id WHERE {$where}",
                 ...$params
             )
         );
+    }
+
+    /** @return array{0: string, 1: string} */
+    private function periodBounds(string $from, string $to): array
+    {
+        return [$from . ' 00:00:00', $to . ' 23:59:59'];
+    }
+
+    /** Unit cost × qty — accessories store unit cost with quantity > 1. */
+    private function lineCostSql(): string
+    {
+        return 'si.cost_price * GREATEST(COALESCE(si.quantity, 1), 1)';
+    }
+
+    /** Line margin accounting quantity. */
+    private function lineMarginSql(): string
+    {
+        return '(si.selling_price - si.cost_price) * GREATEST(COALESCE(si.quantity, 1), 1)';
     }
 
     private function naira(int $kobo): string

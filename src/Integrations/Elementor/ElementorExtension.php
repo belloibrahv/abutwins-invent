@@ -24,7 +24,7 @@ final class ElementorExtension
         $elementsManager->add_category(
             self::CATEGORY,
             [
-                'title' => 'ATOMS Inventory & POS',
+                'title' => 'Abu Twins Invent',
                 'icon'  => 'fa fa-cube',
             ]
         );

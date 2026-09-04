@@ -1,13 +1,13 @@
 <?php
 /**
- * Plugin Name: ATOMS — Inventory & Operations
+ * Plugin Name: Abu Twins Invent — Inventory & Operations
  * Plugin URI: https://abutwins.local
  * Description: Enterprise inventory, IMEI tracking, sales, returns, swaps, debts, and reporting for multi-branch phone retail. A business operating system, not a generic plugin.
- * Version: 1.96.0
+ * Version: 1.98.0
  * Author: TechVaults
  * License: GPL-2.0-or-later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
- * Text Domain: atoms
+ * Text Domain: abutwins
  * Requires at least: 6.4
  * Requires PHP: 8.1
  *
@@ -20,11 +20,15 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('ATOMS_VERSION', '3.27.1');
-define('ATOMS_DB_VERSION', '1.8.0');
+define('ATOMS_VERSION', '3.36.0');
+define('ATOMS_DB_VERSION', '1.9.0');
 define('ATOMS_FILE', __FILE__);
 define('ATOMS_PATH', plugin_dir_path(__FILE__));
 define('ATOMS_URL', plugin_dir_url(__FILE__));
+// Public brand aliases (legacy ATOMS_* constants remain for compatibility).
+define('ABUTWINS_INVENT_VERSION', ATOMS_VERSION);
+define('ABUTWINS_INVENT_PATH', ATOMS_PATH);
+define('ABUTWINS_INVENT_URL', ATOMS_URL);
 
 $atoms_vendor = ATOMS_PATH . 'vendor/autoload.php';
 if (is_readable($atoms_vendor)) {

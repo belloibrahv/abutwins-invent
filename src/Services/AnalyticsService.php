@@ -337,7 +337,7 @@ final class AnalyticsService
 
         $profit = $wpdb->get_results(
             $wpdb->prepare(
-                "SELECT s.branch_id, COALESCE(SUM(si.selling_price - si.cost_price),0) AS profit
+                "SELECT s.branch_id, COALESCE(SUM((si.selling_price - si.cost_price) * GREATEST(COALESCE(si.quantity, 1), 1)),0) AS profit
                  FROM {$items} si
                  INNER JOIN {$sales} s ON s.id = si.sale_id
                  WHERE s.status = 'completed' AND s.posted_at >= %s
@@ -406,7 +406,7 @@ final class AnalyticsService
 
         $profit = $wpdb->get_results(
             $wpdb->prepare(
-                "SELECT s.salesperson_id AS id, COALESCE(SUM(si.selling_price - si.cost_price),0) AS profit
+                "SELECT s.salesperson_id AS id, COALESCE(SUM((si.selling_price - si.cost_price) * GREATEST(COALESCE(si.quantity, 1), 1)),0) AS profit
                  FROM {$items} si
                  INNER JOIN {$sales} s ON s.id = si.sale_id
                  WHERE {$where}
@@ -505,9 +505,9 @@ final class AnalyticsService
         $rows = $wpdb->get_results(
             $wpdb->prepare(
                 "SELECT p.id, p.name, p.brand, v.id AS variant_id, v.color, v.storage, v.variant_name,
-                        COUNT(*) AS units,
-                        COALESCE(SUM(si.selling_price),0) AS revenue,
-                        COALESCE(SUM(si.selling_price - si.cost_price),0) AS profit
+                        COALESCE(SUM(GREATEST(COALESCE(si.quantity, 1), 1)),0) AS units,
+                        COALESCE(SUM(si.selling_price * GREATEST(COALESCE(si.quantity, 1), 1)),0) AS revenue,
+                        COALESCE(SUM((si.selling_price - si.cost_price) * GREATEST(COALESCE(si.quantity, 1), 1)),0) AS profit
                  FROM {$items} si
                  INNER JOIN {$sales} s ON s.id = si.sale_id
                  INNER JOIN {$products} p ON p.id = si.product_id

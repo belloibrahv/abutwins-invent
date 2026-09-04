@@ -16,6 +16,12 @@ final class ShortcodesHandler
         add_shortcode('atoms_trade_in_calculator', [$this, 'tradeInCalculator']);
         add_shortcode('atoms_branch_showcase', [$this, 'branchShowcase']);
         add_shortcode('atoms_pos_portal', [$this, 'posPortal']);
+        // Public aliases without legacy product branding.
+        add_shortcode('abutwins_stock_lookup', [$this, 'stockLookup']);
+        add_shortcode('abutwins_warranty_check', [$this, 'warrantyCheck']);
+        add_shortcode('abutwins_trade_in_calculator', [$this, 'tradeInCalculator']);
+        add_shortcode('abutwins_branch_showcase', [$this, 'branchShowcase']);
+        add_shortcode('abutwins_pos_portal', [$this, 'posPortal']);
 
         add_action('wp_enqueue_scripts', [$this, 'enqueueAssets']);
     }
@@ -49,10 +55,17 @@ final class ShortcodesHandler
             true
         );
 
+        wp_localize_script('atoms-frontend', 'ABUTWINS_FRONTEND', [
+            'root'     => esc_url_raw(rest_url('atoms/v1/public/')),
+            'nonce'    => wp_create_nonce('wp_rest'),
+            'settings' => (new SettingsService())->expose(),
+            'product'  => 'Abu Twins Invent',
+        ]);
         wp_localize_script('atoms-frontend', 'ATOMS_FRONTEND', [
             'root'     => esc_url_raw(rest_url('atoms/v1/public/')),
             'nonce'    => wp_create_nonce('wp_rest'),
             'settings' => (new SettingsService())->expose(),
+            'product'  => 'Abu Twins Invent',
         ]);
     }
 
@@ -293,13 +306,13 @@ final class ShortcodesHandler
     public function posPortal($atts = []): string
     {
         if (!current_user_can('atoms_access')) {
-            return '<div class="atoms-fe-alert warn">Please log in with an authorized ATOMS staff account to access the operations portal.</div>';
+            return '<div class="atoms-fe-alert warn">Please log in with an authorized staff account to access the operations portal.</div>';
         }
 
         $appUrl = admin_url('admin.php?page=atoms');
         return '
         <div class="atoms-fe-portal-container" style="min-height: 800px; width:100%; border-radius:16px; overflow:hidden; border:1px solid #e2e8f0; box-shadow:0 10px 25px rgba(0,0,0,0.08);">
-            <iframe src="' . esc_url($appUrl) . '" style="width:100%; height:900px; border:none;" title="ATOMS Portal"></iframe>
+            <iframe src="' . esc_url($appUrl) . '" style="width:100%; height:900px; border:none;" title="Staff portal"></iframe>
         </div>';
     }
 }
