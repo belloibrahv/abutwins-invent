@@ -10,6 +10,7 @@ final class Menu
         add_action('admin_menu', [$this, 'menu']);
         add_action('admin_enqueue_scripts', [$this, 'assets']);
         add_action('admin_head', [$this, 'favicon'], 1);
+        add_action('admin_head', [$this, 'adminMenuIconCss'], 20);
         add_action('login_head', [$this, 'favicon'], 1);
         add_action('wp_head', [$this, 'favicon'], 1);
         add_filter('get_site_icon_url', [$this, 'siteIconUrl'], 10, 2);
@@ -39,7 +40,8 @@ final class Menu
             'atoms_access',
             'atoms',
             [$this, 'render'],
-            ATOMS_URL . 'assets/img/abutwins-mark.png',
+            // WP admin menus expect ~20px icons; a 512px mark renders full-size and covers the sidebar.
+            ATOMS_URL . 'assets/img/abutwins-icon-20.png',
             2
         );
     }
@@ -52,17 +54,38 @@ final class Menu
         echo '<link rel="apple-touch-icon" href="' . esc_url($base . 'apple-touch-icon.png') . '?v=' . rawurlencode(ATOMS_VERSION) . '">' . "\n";
     }
 
+    /**
+     * Constrain the plugin menu icon on every wp-admin screen (not only page=atoms).
+     * WordPress does not set max-width on .wp-menu-image img, so large PNGs blow up.
+     */
+    public function adminMenuIconCss(): void
+    {
+        echo '<style id="atoms-admin-menu-icon">'
+            . '#adminmenu #toplevel_page_atoms .wp-menu-image img,'
+            . '#adminmenu #toplevel_page_atoms div.wp-menu-image img{'
+            . 'width:20px!important;height:20px!important;max-width:20px!important;max-height:20px!important;'
+            . 'padding:7px 0 0!important;object-fit:contain;box-sizing:content-box;'
+            . '}'
+            . '</style>' . "\n";
+    }
+
     public function siteIconUrl($url, $size)
     {
         $size = (int) $size;
         if ($size > 0 && $size <= 32) {
             return ATOMS_URL . 'assets/img/favicon-32.png';
         }
-        if ($size > 32 && $size <= 180) {
+        if ($size > 32 && $size <= 48) {
+            return ATOMS_URL . 'assets/img/abutwins-icon-48.png';
+        }
+        if ($size > 48 && $size <= 180) {
             return ATOMS_URL . 'assets/img/apple-touch-icon.png';
         }
+        if ($size > 180 && $size <= 192) {
+            return ATOMS_URL . 'assets/img/abutwins-icon-192.png';
+        }
 
-        return ATOMS_URL . 'assets/img/abutwins-mark.png';
+        return ATOMS_URL . 'assets/img/abutwins-icon-512.png';
     }
 
     public function render(): void

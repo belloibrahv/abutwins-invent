@@ -66,15 +66,15 @@ add_action('wp_enqueue_scripts', static function (): void {
 
 add_action('wp_head', static function (): void {
     $icon = ABUTWINS_THEME_URI . '/assets/img/favicon.ico';
-    $png  = ABUTWINS_THEME_URI . '/assets/img/abutwins-mark.png';
+    $png  = ABUTWINS_THEME_URI . '/assets/img/abutwins-icon-32.png';
     $apple = ABUTWINS_THEME_URI . '/assets/img/apple-touch-icon.png';
     if (function_exists('abutwins_plugin_active') && abutwins_plugin_active() && defined('ATOMS_URL')) {
         $icon  = ATOMS_URL . 'assets/img/favicon.ico';
-        $png   = ATOMS_URL . 'assets/img/abutwins-mark.png';
+        $png   = ATOMS_URL . 'assets/img/favicon-32.png';
         $apple = ATOMS_URL . 'assets/img/apple-touch-icon.png';
     }
     echo '<link rel="icon" href="' . esc_url($icon) . '" sizes="any">' . "\n";
-    echo '<link rel="icon" type="image/png" href="' . esc_url($png) . '" sizes="512x512">' . "\n";
+    echo '<link rel="icon" type="image/png" href="' . esc_url($png) . '" sizes="32x32">' . "\n";
     echo '<link rel="apple-touch-icon" href="' . esc_url($apple) . '">' . "\n";
 }, 1);
 

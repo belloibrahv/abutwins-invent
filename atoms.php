@@ -3,7 +3,7 @@
  * Plugin Name: Abu Twins Invent — Inventory & Operations
  * Plugin URI: https://abutwins.local
  * Description: Enterprise inventory, IMEI tracking, sales, returns, swaps, debts, and reporting for multi-branch phone retail. A business operating system, not a generic plugin.
- * Version: 1.98.0
+ * Version: 3.37.0
  * Author: TechVaults
  * License: GPL-2.0-or-later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('ATOMS_VERSION', '3.36.0');
+define('ATOMS_VERSION', '3.37.0');
 define('ATOMS_DB_VERSION', '1.9.0');
 define('ATOMS_FILE', __FILE__);
 define('ATOMS_PATH', plugin_dir_path(__FILE__));

@@ -24,6 +24,10 @@ if (!defined('ABSPATH')) {
       <button type="button" class="atoms-menu-toggle" id="atoms-menu-toggle" aria-label="Open navigation menu">
         <span class="material-symbols-outlined" aria-hidden="true">menu</span>
       </button>
+      <div class="atoms-top-heading" id="atoms-top-heading" hidden>
+        <p class="atoms-top-heading-title" id="atoms-top-heading-title"></p>
+        <p class="atoms-top-heading-sub" id="atoms-top-heading-sub"></p>
+      </div>
       <form class="atoms-search" id="atoms-search-form" role="search">
         <span class="material-symbols-outlined atoms-search-icon" aria-hidden="true">search</span>
         <input type="search" id="atoms-search" placeholder="Search invoice, customer, IMEI, product…" autocomplete="off" aria-label="Global search">

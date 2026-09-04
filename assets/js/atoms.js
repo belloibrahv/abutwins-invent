@@ -701,16 +701,16 @@
   }
 
   function pageShell(opts = {}) {
-    const { group = '', trail = '', title = '', subtitle = '', actions = '', back = '' } = opts;
+    const { group = '', trail = '', title = '', subtitle = '', actions = '', back = '', compact = false } = opts;
     const breadcrumb = group
       ? `<div class="atoms-breadcrumb"><span>${escapeHtml(group)}</span>${trail ? `<span class="material-symbols-outlined">chevron_right</span><span class="current">${escapeHtml(trail)}</span>` : ''}</div>`
       : '';
     return `
-      <div class="atoms-page-shell">
+      <div class="atoms-page-shell${compact ? ' is-compact' : ''}">
         ${back ? `<div class="atoms-back-bar">${back}</div>` : ''}
         <div class="atoms-header-row">
           <div class="atoms-page-intro">
-            ${breadcrumb}
+            ${compact ? '' : breadcrumb}
             <h1 class="atoms-h1">${escapeHtml(title)}</h1>
             ${subtitle ? `<p class="atoms-sub">${subtitle}</p>` : ''}
           </div>
@@ -730,20 +730,49 @@
     });
   }
 
+  function setTopHeading(title = '', subtitle = '') {
+    const wrap = document.getElementById('atoms-top-heading');
+    const titleEl = document.getElementById('atoms-top-heading-title');
+    const subEl = document.getElementById('atoms-top-heading-sub');
+    if (!wrap || !titleEl || !subEl) return;
+    if (!title) {
+      wrap.hidden = true;
+      titleEl.textContent = '';
+      subEl.textContent = '';
+      return;
+    }
+    wrap.hidden = false;
+    titleEl.textContent = title;
+    subEl.textContent = subtitle || '';
+    subEl.hidden = !subtitle;
+  }
+
   function kpiCard(label, value, footer = '', tone = '', icon = '') {
     const raw = String(value ?? '');
     const isMoney = raw.includes('₦');
     const iconHtml = icon
       ? `<span class="atoms-kpi-icon${tone ? ` tone-${tone}` : ''}" aria-hidden="true"><span class="material-symbols-outlined">${icon}</span></span>`
       : '';
+    const foot = footer
+      ? (String(footer).includes('<') ? footer : escapeHtml(footer))
+      : '';
     return `<div class="atoms-kpi-card${tone ? ` tone-${tone}` : ''}${isMoney ? ' is-money' : ''}">
       <div class="atoms-kpi-top">
-        <div class="atoms-kpi-label">${escapeHtml(label)}</div>
-        ${iconHtml}
+        ${iconHtml || '<span></span>'}
       </div>
+      <div class="atoms-kpi-label">${escapeHtml(label)}</div>
       <div class="atoms-kpi-value${isMoney ? ' is-money' : ''}">${value}</div>
-      ${footer ? `<div class="atoms-kpi-foot">${escapeHtml(footer)}</div>` : ''}
+      ${foot ? `<div class="atoms-kpi-foot">${foot}</div>` : ''}
     </div>`;
+  }
+
+  function kpiTrendFoot(text, direction = '') {
+    if (!text) return '';
+    const dirClass = direction === 'up' ? ' is-up' : (direction === 'down' ? ' is-down' : '');
+    const arrow = direction === 'up'
+      ? '<span class="material-symbols-outlined">trending_up</span>'
+      : (direction === 'down' ? '<span class="material-symbols-outlined">trending_down</span>' : '');
+    return `<span class="atoms-kpi-trend${dirClass}">${arrow}${escapeHtml(text)}</span>`;
   }
 
   function attentionPill(icon, label, href, tone = 'info') {
@@ -856,9 +885,15 @@
       </div>`;
     }).join('');
     const u = state.bootstrap.user;
+    const initials = String(u.name || 'U')
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0]?.toUpperCase() || '')
+      .join('') || 'U';
     document.getElementById('atoms-user').innerHTML = `
-      <span class="material-symbols-outlined" style="font-size:18px;">account_circle</span>
-      <span class="atoms-user-text">${escapeHtml(u.name)} <small style="opacity:0.75;">(${(u.roles || []).join(', ')})</small></span>
+      <span class="atoms-user-avatar" aria-hidden="true">${escapeHtml(initials)}</span>
+      <span class="atoms-user-text">${escapeHtml(u.name)} <small>${escapeHtml((u.roles || []).join(', '))}</small></span>
     `;
     paintBrand();
     const select = document.getElementById('atoms-branch');
@@ -921,6 +956,9 @@
 
     updateNavActive(page());
     syncOnline();
+    if (page() !== 'dashboard') {
+      setTopHeading('', '');
+    }
 
     if (memoryCached) {
       root.innerHTML = flashHtml() + memoryCached;
@@ -1094,32 +1132,37 @@
     const qtyStock = d.quantity_stock || {};
     const today = d.today || { net: 0, collected: 0, by_type: { retail: { net: 0 }, wholesale: { net: 0 } } };
     const builders = {
-      sales_today: () => kpiCard('Sales today', money(today.net), `Retail ${money(today.by_type?.retail?.net || 0)}`, '', 'point_of_sale'),
-      cash_collected: () => kpiCard('Cash collected', money(d.today_cash_snapshot?.inflows ?? today.collected), 'Inflows today', '', 'payments'),
-      customer_balances: () => kpiCard('Customer balances', money(d.receivables), 'Outstanding credit', '', 'account_balance_wallet'),
-      supplier_payables: () => kpiCard('Supplier payables', money(d.payables), 'Amount we owe', '', 'request_quote'),
-      overdue_invoices: () => kpiCard('Overdue invoices', String(d.overdue_invoices || 0), `${d.debt_days || 7}+ days late`, (d.overdue_invoices || 0) > 0 ? 'danger' : '', 'warning'),
-      unread_alerts: () => kpiCard('Unread alerts', String(d.notify_unread || 0), 'Needs attention', (d.notify_unread || 0) > 0 ? 'warn' : '', 'notifications_active'),
-      devices_in_stock: () => kpiCard('Devices in stock', String(imei.available || 0), 'Available at this branch', 'ok', 'smartphone'),
-      accessories_stock: () => kpiCard('Accessories on hand', String(qtyStock.qty || 0), `${qtyStock.sku_count || 0} SKU(s)`, '', 'headphones'),
-      low_stock_items: () => kpiCard('Low stock items', String((d.low_stock || []).length), 'At or below threshold', (d.low_stock || []).length ? 'warn' : '', 'inventory_2'),
-      in_transit: () => kpiCard('In transit', String(d.in_transit || 0), 'Transfers on the way', '', 'local_shipping'),
-      open_repairs: () => kpiCard('Open repairs', String(d.open_repairs || 0), 'Active tickets', '', 'build'),
-      stuck_repairs: () => kpiCard('Stuck repairs', String(d.operations_snapshot?.stuck_repair_count || 0), `${d.repair_days || 3}+ days`, (d.operations_snapshot?.stuck_repair_count || 0) > 0 ? 'warn' : '', 'schedule'),
-      faulty_devices: () => kpiCard('Faulty devices', String(d.operations_snapshot?.faulty_device_count || 0), 'Awaiting resolution', '', 'phonelink_erase'),
-      repairs_today: () => kpiCard('Repairs completed today', String((d.today_repair_lines || []).length), 'Closed tickets', 'ok', 'task_alt'),
-      net_cash_today: () => kpiCard('Net cash today', money(d.today_cash_snapshot?.net || d.executive_snapshot?.cash_net_today || 0), 'In minus out', '', 'account_balance'),
-      receivables: () => kpiCard('Receivables', money(d.receivables), `${d.executive_snapshot?.receivable_party_count || 0} customers`, '', 'trending_up'),
-      payables: () => kpiCard('Payables', money(d.payables), `${d.executive_snapshot?.payable_party_count || 0} suppliers`, '', 'trending_down'),
-      pending_approvals: () => kpiCard('Pending approvals', String(d.pending_approvals || 0), 'Waiting for review', (d.pending_approvals || 0) > 0 ? 'warn' : '', 'approval'),
-      wholesale_today: () => kpiCard('Wholesale today', money(today.by_type?.wholesale?.net || 0), 'Wholesale channel', '', 'store'),
+      sales_today: () => kpiCard('Total sales', money(today.net), kpiTrendFoot(`Retail ${money(today.by_type?.retail?.net || 0)} today`), '', 'point_of_sale'),
+      cash_collected: () => kpiCard('Payment received', money(d.today_cash_snapshot?.inflows ?? today.collected), kpiTrendFoot('Cash & transfers in today', 'up'), 'ok', 'payments'),
+      customer_balances: () => kpiCard('Customer balances', money(d.receivables), kpiTrendFoot('Outstanding credit'), '', 'account_balance_wallet'),
+      supplier_payables: () => kpiCard('Payment sent', money(d.payables), kpiTrendFoot('Supplier payables open'), 'info', 'request_quote'),
+      overdue_invoices: () => kpiCard('Overdue invoices', String(d.overdue_invoices || 0), kpiTrendFoot(`${d.debt_days || 7}+ days late`, (d.overdue_invoices || 0) > 0 ? 'down' : ''), (d.overdue_invoices || 0) > 0 ? 'danger' : '', 'warning'),
+      unread_alerts: () => kpiCard('Unread alerts', String(d.notify_unread || 0), kpiTrendFoot('Needs attention'), (d.notify_unread || 0) > 0 ? 'warn' : '', 'notifications_active'),
+      devices_in_stock: () => kpiCard('Devices in stock', String(imei.available || 0), kpiTrendFoot('Available at this branch', 'up'), 'ok', 'smartphone'),
+      accessories_stock: () => kpiCard('Accessories on hand', String(qtyStock.qty || 0), kpiTrendFoot(`${qtyStock.sku_count || 0} SKU(s)`), '', 'headphones'),
+      low_stock_items: () => kpiCard('Low stock items', String((d.low_stock || []).length), kpiTrendFoot('At or below threshold', (d.low_stock || []).length ? 'down' : ''), (d.low_stock || []).length ? 'warn' : '', 'inventory_2'),
+      in_transit: () => kpiCard('In transit', String(d.in_transit || 0), kpiTrendFoot('Transfers on the way'), '', 'local_shipping'),
+      open_repairs: () => kpiCard('Open repairs', String(d.open_repairs || 0), kpiTrendFoot('Active tickets'), '', 'build'),
+      stuck_repairs: () => kpiCard('Stuck repairs', String(d.operations_snapshot?.stuck_repair_count || 0), kpiTrendFoot(`${d.repair_days || 3}+ days`, (d.operations_snapshot?.stuck_repair_count || 0) > 0 ? 'down' : ''), (d.operations_snapshot?.stuck_repair_count || 0) > 0 ? 'warn' : '', 'schedule'),
+      faulty_devices: () => kpiCard('Faulty devices', String(d.operations_snapshot?.faulty_device_count || 0), kpiTrendFoot('Awaiting resolution'), '', 'phonelink_erase'),
+      repairs_today: () => kpiCard('Repairs completed', String((d.today_repair_lines || []).length), kpiTrendFoot('Closed tickets today', 'up'), 'ok', 'task_alt'),
+      net_cash_today: () => kpiCard('Net cash today', money(d.today_cash_snapshot?.net || d.executive_snapshot?.cash_net_today || 0), kpiTrendFoot('In minus out'), '', 'account_balance'),
+      receivables: () => kpiCard('Receivables', money(d.receivables), kpiTrendFoot(`${d.executive_snapshot?.receivable_party_count || 0} customers`), '', 'trending_up'),
+      payables: () => kpiCard('Payables', money(d.payables), kpiTrendFoot(`${d.executive_snapshot?.payable_party_count || 0} suppliers`), '', 'trending_down'),
+      pending_approvals: () => kpiCard('Pending approvals', String(d.pending_approvals || 0), kpiTrendFoot('Waiting for review'), (d.pending_approvals || 0) > 0 ? 'warn' : '', 'approval'),
+      wholesale_today: () => kpiCard('Wholesale today', money(today.by_type?.wholesale?.net || 0), kpiTrendFoot('Wholesale channel'), '', 'store'),
     };
     return builders[id] ? builders[id]() : '';
   }
 
   function dashboardPulseKpis(d, persona) {
-    const cards = homeKpiLayout(persona).map((id) => homeKpiCard(id, d)).filter(Boolean);
-    return `<div class="atoms-kpi-grid atoms-home-kpis">${cards.join('') || kpiCard('Sales today', money(d.today?.net || 0), 'Today')}</div>`;
+    const layout = homeKpiLayout(persona);
+    const hero = layout.slice(0, 4).map((id) => homeKpiCard(id, d)).filter(Boolean);
+    const more = layout.slice(4).map((id) => homeKpiCard(id, d)).filter(Boolean);
+    return `
+      <div class="atoms-kpi-grid atoms-home-kpis">${hero.join('') || kpiCard('Total sales', money(d.today?.net || 0), kpiTrendFoot('Today'), '', 'point_of_sale')}</div>
+      ${more.length ? `<div class="atoms-kpi-grid atoms-home-kpis-more">${more.join('')}</div>` : ''}
+    `;
   }
 
   function readHomeKpiSettingsFromDom() {
@@ -1380,35 +1423,128 @@
     if (!can('atoms_view_reports')) return '';
     const trend = d.trend_lines || [];
     const mix = d.payment_mix_lines || [];
-    const types = d.sale_type_lines || [];
-    const hasAny = trend.some((t) => t.invoices || t.net) || mix.length || types.length;
-    return `<div class="atoms-panel atoms-home-charts">
-      <div class="atoms-panel-head">
-        <div class="atoms-panel-title-wrap">
-          <span class="material-symbols-outlined atoms-panel-icon" aria-hidden="true">monitoring</span>
+    const hasAny = trend.some((t) => t.invoices || t.net) || mix.length;
+    if (!hasAny) {
+      return `<div class="atoms-home-stage">
+        <div class="atoms-chart-card">
+          <div class="atoms-chart-card-head">
+            <div>
+              <h3>Sales &amp; collections</h3>
+              <p class="atoms-chart-card-sub">Last 14 days</p>
+            </div>
+            <a class="atoms-btn ghost sm" href="#/analytics">Full analytics</a>
+          </div>
+          <p class="atoms-muted">No chart data yet — complete a few sales to populate trends.</p>
+        </div>
+      </div>`;
+    }
+    return `<div class="atoms-home-stage">
+      <div class="atoms-chart-card">
+        <div class="atoms-chart-card-head">
           <div>
-            <h2 class="atoms-panel-title">Charts & trends</h2>
-            <p class="atoms-panel-sub">14-day sales, payment mix, and retail vs wholesale</p>
+            <h3>Sales trend</h3>
+            <p class="atoms-chart-card-sub">Net sales · last 14 days</p>
+          </div>
+          <a class="atoms-btn ghost sm" href="#/analytics"><span class="material-symbols-outlined">open_in_new</span> Analytics</a>
+        </div>
+        ${barChart(trend, 'net', 'date', 'Net sales', { home: true })}
+      </div>
+      <div class="atoms-chart-card">
+        <div class="atoms-chart-card-head">
+          <div>
+            <h3>Payment mix</h3>
+            <p class="atoms-chart-card-sub">Collected by method</p>
           </div>
         </div>
-        <a class="atoms-btn ghost sm" href="#/analytics"><span class="material-symbols-outlined">open_in_new</span> Full analytics</a>
+        ${doughnutChart(mix, 'collected', 'method', 'Collected', { home: true })}
+      </div>
+    </div>`;
+  }
+
+  function dashboardRecentInvoicesCard(d) {
+    const rows = dashTake(d.today_sales_lines, 6);
+    const body = rows.length
+      ? `<div class="atoms-table-wrap"><table class="atoms-table"><thead><tr>
+          <th>Invoice</th><th>Customer</th><th>Date</th><th>Paid</th><th>Status</th>
+        </tr></thead><tbody>
+        ${rows.map((l) => {
+          const paid = Number(l.paid_amount || 0);
+          const total = Number(l.total || 0);
+          const status = paid >= total && total > 0
+            ? '<span class="atoms-status-pill">Paid</span>'
+            : (paid > 0
+              ? '<span class="atoms-status-pill is-warn">Partial</span>'
+              : '<span class="atoms-status-pill is-info">Open</span>');
+          const when = l.sold_at || l.created_at || l.sale_date || 'Today';
+          return `<tr>
+            <td>${l.invoice_number ? `<button type="button" class="atoms-link js-invoice" data-inv="${escapeHtml(l.invoice_number)}">${escapeHtml(l.invoice_number)}</button>` : '—'}</td>
+            <td>${l.customer_id ? `<button type="button" class="atoms-link js-aging-cust" data-id="${l.customer_id}">${escapeHtml(l.customer_name || '')}</button>` : escapeHtml(l.customer_name || 'Walk-in')}</td>
+            <td>${escapeHtml(String(when).slice(0, 16))}</td>
+            <td>${money(paid)}</td>
+            <td>${status}</td>
+          </tr>`;
+        }).join('')}
+      </tbody></table></div>
+      <p class="atoms-home-queue-foot"><a href="#/pos">New sale</a>${(d.today_sales_lines || []).length > 6 ? ' · <a href="#/analytics">See all sales</a>' : ''}</p>`
+      : dashQueueEmpty('No sales posted today yet.', '#/pos', 'Start a sale');
+
+    return `<div class="atoms-panel atoms-home-recent-invoices">
+      <div class="atoms-panel-head">
+        <div class="atoms-panel-title-wrap">
+          <span class="material-symbols-outlined atoms-panel-icon" aria-hidden="true">receipt_long</span>
+          <div>
+            <h2 class="atoms-panel-title">Recent invoices</h2>
+            <p class="atoms-panel-sub">Sales posted today at this branch</p>
+          </div>
+        </div>
+        <a class="atoms-btn ghost sm" href="#/pos">Sales invoice</a>
+      </div>
+      <div class="atoms-panel-body">${body}</div>
+    </div>`;
+  }
+
+  function dashboardStockPulseCard(d) {
+    const imei = (d.imei && !Array.isArray(d.imei)) ? d.imei : {};
+    const qtyStock = d.quantity_stock || {};
+    const low = (d.low_stock || []).length;
+    const devices = Number(imei.available || 0);
+    return `<div class="atoms-panel atoms-stock-pulse">
+      <div class="atoms-panel-head">
+        <div class="atoms-panel-title-wrap">
+          <span class="material-symbols-outlined atoms-panel-icon" aria-hidden="true">inventory_2</span>
+          <div>
+            <h2 class="atoms-panel-title">Stock pulse</h2>
+            <p class="atoms-panel-sub">Branch inventory snapshot</p>
+          </div>
+        </div>
+        <a class="atoms-btn ghost sm" href="#/inventory">7 days</a>
       </div>
       <div class="atoms-panel-body">
-        ${hasAny ? `<div class="atoms-chart-grid">
-          <div class="atoms-chart-card">
-            <h3>Sales trend</h3>
-            ${lineChart(trend, 'net', 'date', 'Net sales')}
+        <div class="atoms-stock-pulse-stats">
+          <div class="atoms-stock-pulse-stat">
+            <span class="atoms-muted">Total sales items</span>
+            <strong>${devices}</strong>
+            ${kpiTrendFoot('Devices available', devices > 0 ? 'up' : '')}
           </div>
-          <div class="atoms-chart-card">
-            <h3>Payment mix</h3>
-            ${doughnutChart(mix, 'collected', 'method', 'Collected')}
+          <div class="atoms-stock-pulse-stat">
+            <span class="atoms-muted">Accessories on hand</span>
+            <strong>${Number(qtyStock.qty || 0)}</strong>
+            <span class="atoms-kpi-foot">${escapeHtml(String(qtyStock.sku_count || 0))} SKU(s)</span>
           </div>
-          <div class="atoms-chart-card">
-            <h3>Retail vs wholesale</h3>
-            ${barChart(types, 'net', 'label', 'Net by type')}
+          <div class="atoms-stock-pulse-stat">
+            <span class="atoms-muted">Low stock items</span>
+            <strong>${low}</strong>
+            ${kpiTrendFoot(low ? 'Needs reorder' : 'Healthy', low ? 'down' : 'up')}
           </div>
-        </div>` : '<p class="atoms-muted">No chart data yet — complete a few sales to populate trends.</p>'}
+        </div>
       </div>
+    </div>`;
+  }
+
+  function dashboardHeroBottom(d) {
+    return `<div class="atoms-home-hero-bottom">
+      ${dashboardRecentInvoicesCard(d)}
+      ${dashboardStockPulseCard(d)}
     </div>`;
   }
 
@@ -1700,8 +1836,9 @@
       ${pageShell({
         group: 'Your store',
         trail: 'Overview',
-        title: `Good ${greeting()}, ${escapeHtml(branchName)}`,
-        subtitle: `${homePersonaLabel(persona)} — what needs attention today, then your top work queues.`,
+        title: 'Dashboard Overview',
+        subtitle: `Good ${greeting()}, ${escapeHtml(branchName)} · ${homePersonaLabel(persona)}`,
+        compact: true,
         actions: `${can('atoms_create_sale') ? '<a class="atoms-btn primary" href="#/pos"><span class="material-symbols-outlined">point_of_sale</span> New sale</a>' : ''}${can('atoms_create_payment') ? '<a class="atoms-btn accent" href="#/customers"><span class="material-symbols-outlined">payments</span> Collect payment</a>' : ''}`,
       })}
       ${dashWarn}
@@ -1709,8 +1846,9 @@
       ${attention.length ? `<div class="atoms-attention-bar">${attention.join('')}</div>` : ''}
       <div class="atoms-home-desk">
         ${dashboardPulseKpis(d, persona)}
-        ${dashboardUserCustomizeBar(persona)}
         ${dashboardChartsPanel(d)}
+        ${dashboardHeroBottom(d)}
+        ${dashboardUserCustomizeBar(persona)}
         ${quickActions ? `<div class="atoms-quick-actions">${quickActions}</div>` : ''}
         ${dashboardWorkQueuesPanel(d)}
         ${dashboardInsightsTeaser(d)}
@@ -6745,7 +6883,7 @@
   }
 
   let chartCounter = 0;
-  const CHART_COLORS = ['#2F3590', '#10B981', '#F59E0B', '#EF4444', '#0EA5E9', '#8B5CF6', '#64748B'];
+  const CHART_COLORS = ['#2F3590', '#0F9F6E', '#F59E0B', '#E11D48', '#0284C7', '#64748B', '#4B52B0'];
 
   function mountChart(chartId, config) {
     requestAnimationFrame(() => {
@@ -6764,10 +6902,23 @@
     return '₦' + (v >= 1000000 ? (v / 1000000).toFixed(1) + 'M' : (v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v));
   }
 
-  function barChart(rows, key, labelKey, title = 'Net Sales (₦)') {
+  function chartGradient(ctx, colorTop, colorBottom) {
+    const { chart } = ctx;
+    const { ctx: c, chartArea } = chart;
+    if (!chartArea) return colorTop;
+    const g = c.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
+    g.addColorStop(0, colorBottom);
+    g.addColorStop(1, colorTop);
+    return g;
+  }
+
+  function barChart(rows, key, labelKey, title = 'Net Sales (₦)', opts = {}) {
     if (!rows || !rows.length) return '<p class="atoms-muted">Nothing to chart yet.</p>';
     const chartId = `atoms-chart-${++chartCounter}`;
-    const labels = rows.map((r) => r[labelKey] || r.date || r.name || r.method || r.label || '');
+    const labels = rows.map((r) => {
+      const raw = String(r[labelKey] || r.date || r.name || r.method || r.label || '');
+      return raw.length >= 10 ? raw.slice(5) : raw;
+    });
     const dataVals = rows.map((r) => Number(r[key] || 0) / 100);
     mountChart(chartId, {
       type: 'bar',
@@ -6776,10 +6927,11 @@
         datasets: [{
           label: title,
           data: dataVals,
-          backgroundColor: 'rgba(47, 53, 144, 0.85)',
-          borderColor: '#2F3590',
-          borderWidth: 1,
-          borderRadius: 6,
+          backgroundColor: (ctx) => chartGradient(ctx, 'rgba(47, 53, 144, 0.95)', 'rgba(75, 82, 176, 0.55)'),
+          borderWidth: 0,
+          borderRadius: 8,
+          borderSkipped: false,
+          maxBarThickness: opts.home ? 28 : 36,
           hoverBackgroundColor: '#252B78',
         }],
       },
@@ -6789,14 +6941,25 @@
         plugins: {
           legend: { display: false },
           tooltip: {
+            backgroundColor: '#0F172A',
+            padding: 10,
+            cornerRadius: 8,
             callbacks: {
               label: (ctx) => ' ₦' + Number(ctx.raw || 0).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
             },
           },
         },
         scales: {
-          x: { grid: { display: false } },
-          y: { ticks: { callback: moneyTick }, grid: { color: 'rgba(226, 232, 240, 0.6)' } },
+          x: {
+            grid: { display: false },
+            ticks: { color: '#647089', font: { size: 11, family: "'Plus Jakarta Sans', sans-serif" } },
+            border: { display: false },
+          },
+          y: {
+            ticks: { callback: moneyTick, color: '#647089', font: { size: 11 } },
+            grid: { color: 'rgba(226, 232, 240, 0.7)', drawBorder: false },
+            border: { display: false },
+          },
         },
       },
     });
@@ -6819,11 +6982,15 @@
           label: title,
           data: dataVals,
           borderColor: '#2F3590',
-          backgroundColor: 'rgba(47, 53, 144, 0.12)',
+          backgroundColor: (ctx) => chartGradient(ctx, 'rgba(47, 53, 144, 0.22)', 'rgba(47, 53, 144, 0.02)'),
           fill: true,
-          tension: 0.35,
+          tension: 0.4,
           pointRadius: 3,
+          pointHoverRadius: 5,
           pointBackgroundColor: '#2F3590',
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2,
+          borderWidth: 2.5,
         }],
       },
       options: {
@@ -6832,21 +6999,32 @@
         plugins: {
           legend: { display: false },
           tooltip: {
+            backgroundColor: '#0F172A',
+            padding: 10,
+            cornerRadius: 8,
             callbacks: {
               label: (ctx) => ' ₦' + Number(ctx.raw || 0).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
             },
           },
         },
         scales: {
-          x: { grid: { display: false } },
-          y: { ticks: { callback: moneyTick }, grid: { color: 'rgba(226, 232, 240, 0.6)' } },
+          x: {
+            grid: { display: false },
+            ticks: { color: '#647089', font: { size: 11 } },
+            border: { display: false },
+          },
+          y: {
+            ticks: { callback: moneyTick, color: '#647089', font: { size: 11 } },
+            grid: { color: 'rgba(226, 232, 240, 0.7)', drawBorder: false },
+            border: { display: false },
+          },
         },
       },
     });
     return `<div class="atoms-chart-canvas"><canvas id="${chartId}"></canvas></div>`;
   }
 
-  function doughnutChart(rows, key, labelKey, title = 'Mix') {
+  function doughnutChart(rows, key, labelKey, title = 'Mix', opts = {}) {
     if (!rows || !rows.length) return '<p class="atoms-muted">Nothing to chart yet.</p>';
     const chartId = `atoms-chart-${++chartCounter}`;
     const labels = rows.map((r) => r[labelKey] || r.method || r.name || '');
@@ -6859,15 +7037,32 @@
           label: title,
           data: dataVals,
           backgroundColor: labels.map((_, i) => CHART_COLORS[i % CHART_COLORS.length]),
-          borderWidth: 0,
+          borderWidth: 3,
+          borderColor: '#ffffff',
+          hoverOffset: 6,
         }],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        cutout: opts.home ? '62%' : '55%',
         plugins: {
-          legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+          legend: {
+            position: 'bottom',
+            labels: {
+              boxWidth: 10,
+              boxHeight: 10,
+              borderRadius: 4,
+              useBorderRadius: true,
+              padding: 14,
+              font: { size: 11, family: "'Plus Jakarta Sans', sans-serif" },
+              color: '#3D4A63',
+            },
+          },
           tooltip: {
+            backgroundColor: '#0F172A',
+            padding: 10,
+            cornerRadius: 8,
             callbacks: {
               label: (ctx) => ` ${ctx.label}: ₦` + Number(ctx.raw || 0).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
             },

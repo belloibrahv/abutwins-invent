@@ -8,7 +8,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
 
 :root {
-  /* Core Brand & Color Tokens — royal blue, not indigo */
+  /* Core Brand & Color Tokens — royal blue from Abu Twins mark */
   --atoms-primary: #2F3590;
   --atoms-primary-hover: #252B78;
   --atoms-primary-active: #1E2366;
@@ -39,54 +39,54 @@
   --atoms-info-border: #BAE6FD;
   --atoms-info-text: #0369A1;
 
-  /* Cool ops canvas */
-  --atoms-bg: #F2F4F9;
+  /* Soft SaaS canvas (mockup structure) */
+  --atoms-bg: #F4F7FE;
   --atoms-surface: #ffffff;
-  --atoms-surface-subtle: #F7F8FC;
-  --atoms-surface-hover: #EEF1F7;
-  --atoms-surface-active: #E4E8F1;
+  --atoms-surface-subtle: #F8FAFF;
+  --atoms-surface-hover: #EEF2FB;
+  --atoms-surface-active: #E4EAF6;
 
-  --atoms-line: #E3E7F0;
-  --atoms-line-subtle: #EEF1F7;
-  --atoms-line-hover: #CDD3E0;
+  --atoms-line: #E6EAF4;
+  --atoms-line-subtle: #F0F3FA;
+  --atoms-line-hover: #CDD5E6;
 
-  --atoms-text-primary: #0B1220;
+  --atoms-text-primary: #0F172A;
   --atoms-text-secondary: #3D4A63;
   --atoms-text-muted: #647089;
-  --atoms-text-faint: #929AAD;
+  --atoms-text-faint: #94A0B8;
 
-  /* Sidebar — deep navy aligned to brand */
-  --atoms-side-bg: #0A0E1A;
-  --atoms-side-surface: #12182A;
-  --atoms-side-border: #1C2438;
+  /* Sidebar — deep charcoal navy */
+  --atoms-side-bg: #12141F;
+  --atoms-side-surface: #1A1D2B;
+  --atoms-side-border: #252838;
   --atoms-side-text: #F7F8FC;
-  --atoms-side-muted: #94A0B8;
+  --atoms-side-muted: #9AA3B8;
   --atoms-side-hover: rgba(255, 255, 255, 0.06);
-  --atoms-side-active: rgba(47, 53, 144, 0.32);
+  --atoms-side-active: rgba(47, 53, 144, 0.42);
 
-  --atoms-sidebar-w: 268px;
+  --atoms-sidebar-w: 260px;
   --atoms-sidebar-w-collapsed: 72px;
 
-  --atoms-r-xs: 4px;
-  --atoms-r-sm: 6px;
-  --atoms-r-md: 10px;
-  --atoms-r-lg: 14px;
+  --atoms-r-xs: 6px;
+  --atoms-r-sm: 8px;
+  --atoms-r-md: 12px;
+  --atoms-r-lg: 16px;
   --atoms-r-xl: 18px;
   --atoms-r-2xl: 22px;
   --atoms-r-full: 9999px;
 
-  --atoms-shadow-xs: 0 1px 2px rgba(11, 18, 32, 0.04);
-  --atoms-shadow-sm: 0 1px 3px rgba(11, 18, 32, 0.06), 0 1px 2px rgba(11, 18, 32, 0.04);
-  --atoms-shadow-md: 0 8px 16px -6px rgba(11, 18, 32, 0.08);
-  --atoms-shadow-lg: 0 16px 28px -10px rgba(11, 18, 32, 0.12);
-  --atoms-shadow-xl: 0 24px 40px -12px rgba(11, 18, 32, 0.14);
+  --atoms-shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --atoms-shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.05);
+  --atoms-shadow-md: 0 8px 24px -8px rgba(15, 23, 42, 0.1);
+  --atoms-shadow-lg: 0 16px 32px -12px rgba(15, 23, 42, 0.14);
+  --atoms-shadow-xl: 0 24px 48px -16px rgba(15, 23, 42, 0.16);
 
   --atoms-font-sans: 'Plus Jakarta Sans', 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --atoms-font-mono: 'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-  --atoms-elevation-1: 0 1px 2px rgba(11, 18, 32, 0.04), 0 1px 3px rgba(11, 18, 32, 0.06);
-  --atoms-elevation-2: 0 6px 16px -4px rgba(11, 18, 32, 0.08);
-  --atoms-elevation-3: 0 14px 28px -8px rgba(11, 18, 32, 0.12);
+  --atoms-elevation-1: 0 2px 10px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.03);
+  --atoms-elevation-2: 0 10px 28px -10px rgba(15, 23, 42, 0.1);
+  --atoms-elevation-3: 0 18px 40px -12px rgba(15, 23, 42, 0.14);
 }
 
 /* Base resets & WP Admin isolation */
@@ -156,6 +156,10 @@ html.atoms-prefers-sidebar-collapsed .atoms-brand-logo-full {
   display: none;
 }
 
+html.atoms-prefers-sidebar-collapsed .atoms-brand-word {
+  display: none;
+}
+
 html.atoms-prefers-sidebar-collapsed .atoms-brand-logo-icon {
   display: block;
 }
@@ -164,9 +168,7 @@ html.atoms-prefers-sidebar-collapsed .atoms-brand-logo-icon {
   display: grid;
   grid-template-columns: var(--atoms-sidebar-w) 1fr;
   min-height: 100vh;
-  background:
-    radial-gradient(1200px 480px at 100% -10%, rgba(47, 53, 144, 0.07), transparent 55%),
-    var(--atoms-bg);
+  background: var(--atoms-bg);
   transition: grid-template-columns 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -180,10 +182,10 @@ html.atoms-prefers-sidebar-collapsed .atoms-brand-logo-icon {
 .atoms-sidebar {
   background: var(--atoms-side-bg);
   color: var(--atoms-side-text);
-  padding: 18px 12px;
+  padding: 20px 14px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
   border-right: 1px solid var(--atoms-side-border);
   position: sticky;
   top: 0;
@@ -197,9 +199,9 @@ html.atoms-prefers-sidebar-collapsed .atoms-brand-logo-icon {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 4px 6px 12px;
+  padding: 2px 8px 14px;
   border-bottom: 1px solid var(--atoms-side-border);
-  min-height: 52px;
+  min-height: 56px;
 }
 
 .atoms-brand-mark {
@@ -208,27 +210,59 @@ html.atoms-prefers-sidebar-collapsed .atoms-brand-logo-icon {
 }
 
 .atoms-brand-logo {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   line-height: 0;
   text-decoration: none;
+  min-width: 0;
+}
+
+.atoms-brand-word {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  line-height: 1.15;
+}
+
+.atoms-brand-word-name {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.atoms-brand-word-sub {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #9AA3B8;
 }
 
 .atoms-brand-logo-full {
   display: block;
-  width: 48px;
-  height: 48px;
-  max-width: 48px;
-  max-height: 48px;
+  width: 40px !important;
+  height: 40px !important;
+  max-width: 40px !important;
+  max-height: 40px !important;
   object-fit: contain;
   object-position: center;
   border-radius: 50%;
   background: #fff;
+  flex-shrink: 0;
 }
 
 .atoms-brand-logo-icon {
   display: none;
-  width: 36px;
-  height: 36px;
+  width: 36px !important;
+  height: 36px !important;
+  max-width: 36px !important;
+  max-height: 36px !important;
   margin: 0 auto;
   border-radius: 50%;
   background: #fff;
@@ -288,7 +322,7 @@ html.atoms-prefers-sidebar-collapsed .atoms-brand-logo-icon {
 .atoms-nav {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
   flex: 1;
   overflow-y: auto;
   padding-right: 2px;
@@ -306,36 +340,36 @@ html.atoms-prefers-sidebar-collapsed .atoms-brand-logo-icon {
 .atoms-nav-group {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
 }
 
 .atoms-nav-label {
-  font-size: 10.5px;
-  letter-spacing: 0.08em;
+  font-size: 10px;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #64748b;
-  padding: 6px 10px 4px;
+  color: #6B728E;
+  padding: 4px 12px 6px;
   font-weight: 700;
 }
 
 .atoms-nav a {
-  color: #94a3b8;
+  color: #A4ADC4;
   text-decoration: none;
-  padding: 7.5px 10px;
-  border-radius: var(--atoms-r-md);
-  font-size: 13px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: 13.5px;
   font-weight: 500;
   display: flex;
   align-items: center;
-  gap: 9px;
-  transition: all 0.15s ease;
-  min-height: 36px;
+  gap: 10px;
+  transition: background 0.15s ease, color 0.15s ease;
+  min-height: 40px;
   position: relative;
 }
 
 .atoms-nav a .material-symbols-outlined {
-  font-size: 18px;
-  color: #64748b;
+  font-size: 20px;
+  color: #7B849E;
   transition: color 0.15s ease;
 }
 
@@ -352,13 +386,11 @@ html.atoms-prefers-sidebar-collapsed .atoms-brand-logo-icon {
   background: var(--atoms-side-active);
   color: #ffffff;
   font-weight: 600;
-  border-left: 3px solid var(--atoms-primary);
-  padding-left: 7px;
-  box-shadow: inset 0 0 0 1px rgba(47, 53, 144, 0.25);
+  box-shadow: inset 0 0 0 1px rgba(47, 53, 144, 0.35);
 }
 
 .atoms-nav a.active .material-symbols-outlined {
-  color: #B8BDE8;
+  color: #C5CAE8;
 }
 
 /* Collapsed sidebar — icon rail with hover labels */
@@ -423,10 +455,12 @@ html.atoms-prefers-sidebar-collapsed .atoms-brand-logo-icon {
   gap: 0;
 }
 
+.atoms-root.sidebar-collapsed .atoms-brand-word {
+  display: none;
+}
+
 .atoms-root.sidebar-collapsed .atoms-nav a.active {
-  border-left: none;
-  padding-left: 9px;
-  box-shadow: inset 3px 0 0 var(--atoms-primary);
+  box-shadow: inset 0 0 0 1px rgba(47, 53, 144, 0.45);
 }
 
 .atoms-root.sidebar-collapsed .atoms-nav a::after {
@@ -489,15 +523,33 @@ html.atoms-prefers-sidebar-collapsed .atoms-brand-logo-icon {
 .atoms-user {
   font-size: 12px;
   color: var(--atoms-side-muted);
-  padding: 10px 8px 2px;
+  padding: 12px 10px 4px;
   border-top: 1px solid var(--atoms-side-border);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+}
+
+.atoms-user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, var(--atoms-primary), #4B52B0);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  flex-shrink: 0;
 }
 
 .atoms-user small {
-  color: #64748b;
+  color: #6B728E;
+  display: block;
+  margin-top: 1px;
+  font-size: 10.5px;
 }
 
 /* ==========================================================================
@@ -510,19 +562,49 @@ html.atoms-prefers-sidebar-collapsed .atoms-brand-logo-icon {
 }
 
 .atoms-top {
-  min-height: 64px;
+  min-height: 68px;
   height: auto;
   display: flex;
-  gap: 12px 14px;
+  gap: 12px 16px;
   align-items: center;
   flex-wrap: wrap;
-  padding: 10px 22px;
+  padding: 12px 28px;
   border-bottom: 1px solid transparent;
   position: sticky;
   top: 0;
   z-index: 40;
-  backdrop-filter: blur(12px);
-  background-color: rgba(242, 244, 249, 0.86);
+  backdrop-filter: blur(14px);
+  background-color: rgba(244, 247, 254, 0.88);
+}
+
+.atoms-top-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 0 1 auto;
+  margin-right: 4px;
+}
+
+.atoms-top-heading-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--atoms-text-primary);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.atoms-top-heading-sub {
+  margin: 0;
+  font-size: 12px;
+  color: var(--atoms-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .atoms-search {
@@ -544,14 +626,15 @@ html.atoms-prefers-sidebar-collapsed .atoms-brand-logo-icon {
 
 .atoms-search input {
   width: 100%;
-  height: 38px;
+  height: 40px;
   border: 1px solid var(--atoms-line);
-  border-radius: var(--atoms-r-md);
+  border-radius: 12px;
   padding: 6px 44px 6px 36px;
   font-family: inherit;
   font-size: 13px;
-  background: var(--atoms-bg);
+  background: var(--atoms-surface);
   color: var(--atoms-text-primary);
+  box-shadow: var(--atoms-shadow-xs);
   transition: all 0.15s ease;
 }
 
@@ -724,17 +807,17 @@ html.atoms-prefers-sidebar-collapsed .atoms-brand-logo-icon {
    3. PAGE CONTAINER & HEADERS
    ========================================================================== */
 .atoms-page {
-  margin: 16px 18px 28px;
-  padding: 22px 24px 28px;
+  margin: 8px 20px 32px;
+  padding: 8px 8px 24px;
   max-width: none;
   box-sizing: border-box;
   position: relative;
   contain: layout style;
-  min-height: calc(100vh - 108px);
-  background: var(--atoms-surface);
-  border: 1px solid var(--atoms-line);
-  border-radius: var(--atoms-r-2xl);
-  box-shadow: var(--atoms-elevation-1);
+  min-height: calc(100vh - 100px);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .atoms-page.is-entering {
@@ -907,11 +990,23 @@ html.atoms-prefers-sidebar-collapsed .atoms-brand-logo-icon {
 
 .atoms-h1 {
   font-family: var(--atoms-font-sans);
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 800;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.035em;
   color: var(--atoms-text-primary);
   margin: 0;
+}
+
+.atoms-page-shell.is-compact .atoms-header-row {
+  margin-bottom: 12px;
+}
+
+.atoms-page-shell.is-compact .atoms-h1 {
+  font-size: 22px;
+}
+
+.atoms-page-shell.is-compact .atoms-breadcrumb {
+  display: none;
 }
 
 .atoms-sub {
@@ -951,18 +1046,18 @@ html.atoms-prefers-sidebar-collapsed .atoms-brand-logo-icon {
 
 .atoms-card {
   background: var(--atoms-surface);
-  border-radius: var(--atoms-r-lg);
-  box-shadow: var(--atoms-shadow-xs);
+  border-radius: 18px;
+  box-shadow: var(--atoms-elevation-1);
   padding: 18px;
-  border: 1px solid var(--atoms-line);
+  border: 1px solid transparent;
   box-sizing: border-box;
   transition: all 0.15s ease;
   position: relative;
 }
 
 .atoms-card:hover {
-  border-color: var(--atoms-line-hover);
-  box-shadow: var(--atoms-shadow-sm);
+  border-color: var(--atoms-primary-border);
+  box-shadow: var(--atoms-elevation-2);
 }
 
 .atoms-card-top {
@@ -2006,38 +2101,51 @@ a.atoms-back-btn {
 
 .atoms-kpi-card {
   background: var(--atoms-surface);
-  border: 1px solid var(--atoms-line);
-  border-radius: var(--atoms-r-xl);
-  padding: 16px 18px 18px;
-  min-height: 118px;
+  border: 1px solid transparent;
+  border-radius: 18px;
+  padding: 18px 18px 16px;
+  min-height: 128px;
   box-shadow: var(--atoms-elevation-1);
   transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
   position: relative;
   overflow: hidden;
+  animation: atoms-kpi-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.atoms-kpi-card:nth-child(1) { animation-delay: 0.02s; }
+.atoms-kpi-card:nth-child(2) { animation-delay: 0.06s; }
+.atoms-kpi-card:nth-child(3) { animation-delay: 0.1s; }
+.atoms-kpi-card:nth-child(4) { animation-delay: 0.14s; }
+
+@keyframes atoms-kpi-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .atoms-kpi-card::before {
-  content: '';
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  background: transparent;
+  content: none;
 }
 
 .atoms-kpi-card.is-money {
-  min-height: 124px;
-  padding: 18px 20px;
+  min-height: 132px;
+  padding: 18px 20px 16px;
 }
 
 .atoms-kpi-card:hover {
   border-color: var(--atoms-primary-border);
   box-shadow: var(--atoms-elevation-2);
-  transform: translateY(-1px);
+  transform: translateY(-2px);
 }
 
 .atoms-kpi-top {
@@ -2045,70 +2153,78 @@ a.atoms-back-btn {
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 2px;
+  margin-bottom: 0;
 }
 
 .atoms-kpi-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 11px;
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  background: var(--atoms-primary-subtle);
+  background: linear-gradient(160deg, rgba(47, 53, 144, 0.16), rgba(47, 53, 144, 0.06));
   color: var(--atoms-primary);
 }
 
 .atoms-kpi-icon .material-symbols-outlined {
-  font-size: 20px;
+  font-size: 22px;
 }
 
 .atoms-kpi-card.tone-warn .atoms-kpi-icon,
 .atoms-kpi-icon.tone-warn {
-  background: var(--atoms-warn-subtle);
+  background: linear-gradient(160deg, rgba(234, 179, 8, 0.22), rgba(234, 179, 8, 0.08));
   color: var(--atoms-warn-text);
 }
 
 .atoms-kpi-card.tone-danger .atoms-kpi-icon,
 .atoms-kpi-icon.tone-danger {
-  background: var(--atoms-danger-subtle);
+  background: linear-gradient(160deg, rgba(225, 29, 72, 0.18), rgba(225, 29, 72, 0.06));
   color: var(--atoms-danger-text);
 }
 
 .atoms-kpi-card.tone-ok .atoms-kpi-icon,
 .atoms-kpi-icon.tone-ok {
-  background: var(--atoms-accent-subtle);
+  background: linear-gradient(160deg, rgba(15, 159, 110, 0.2), rgba(15, 159, 110, 0.06));
   color: var(--atoms-accent-text);
 }
 
-.atoms-kpi-card.tone-warn::before { background: var(--atoms-warn); }
-.atoms-kpi-card.tone-danger::before { background: var(--atoms-danger); }
-.atoms-kpi-card.tone-ok::before { background: var(--atoms-accent); }
+.atoms-kpi-card.tone-info .atoms-kpi-icon,
+.atoms-kpi-icon.tone-info {
+  background: linear-gradient(160deg, rgba(2, 132, 199, 0.18), rgba(2, 132, 199, 0.06));
+  color: var(--atoms-info-text);
+}
+
+.atoms-kpi-card.tone-warn::before,
+.atoms-kpi-card.tone-danger::before,
+.atoms-kpi-card.tone-ok::before {
+  content: none;
+}
 
 .atoms-kpi-label {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--atoms-text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  color: var(--atoms-text-secondary);
   line-height: 1.35;
-  padding-top: 4px;
+  padding-top: 0;
 }
 
 .atoms-kpi-value {
-  font-family: var(--atoms-font-mono);
-  font-size: clamp(1.35rem, 1.1rem + 0.45vw, 1.85rem);
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-family: var(--atoms-font-sans);
+  font-size: clamp(1.4rem, 1.15rem + 0.55vw, 1.85rem);
+  font-weight: 800;
+  letter-spacing: -0.035em;
   color: var(--atoms-text-primary);
   line-height: 1.15;
   min-width: 0;
 }
 
 .atoms-kpi-value.is-money {
-  font-size: clamp(1.05rem, 0.65rem + 1.1vw, 1.72rem);
-  letter-spacing: -0.035em;
+  font-size: clamp(1.15rem, 0.75rem + 1vw, 1.7rem);
+  letter-spacing: -0.04em;
   line-height: 1.2;
   word-break: break-word;
   overflow-wrap: anywhere;
@@ -2121,6 +2237,27 @@ a.atoms-back-btn {
   line-height: 1.35;
   min-width: 0;
   overflow-wrap: anywhere;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.atoms-kpi-trend {
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.atoms-kpi-trend.is-up {
+  color: var(--atoms-accent-text);
+}
+
+.atoms-kpi-trend.is-down {
+  color: var(--atoms-danger-text);
+}
+
+.atoms-kpi-trend .material-symbols-outlined {
+  font-size: 14px;
+  vertical-align: -2px;
 }
 
 .atoms-quick-actions {
@@ -2138,12 +2275,12 @@ a.atoms-back-btn {
   text-decoration: none;
   color: var(--atoms-text-primary);
   background: var(--atoms-surface);
-  border: 1px solid var(--atoms-line);
-  border-radius: var(--atoms-r-lg);
+  border: 1px solid transparent;
+  border-radius: 16px;
   padding: 14px;
   min-height: 88px;
   transition: all 0.15s ease;
-  box-shadow: var(--atoms-shadow-xs);
+  box-shadow: var(--atoms-elevation-1);
 }
 
 .atoms-quick-action:hover {
@@ -2525,8 +2662,8 @@ a.atoms-back-btn {
 
 .atoms-panel {
   background: var(--atoms-surface);
-  border: 1px solid var(--atoms-line);
-  border-radius: var(--atoms-r-xl);
+  border: 1px solid transparent;
+  border-radius: 18px;
   box-shadow: var(--atoms-elevation-1);
   overflow: hidden;
 }
@@ -2536,9 +2673,9 @@ a.atoms-back-btn {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--atoms-line-subtle);
-  background: linear-gradient(180deg, #ffffff 0%, var(--atoms-surface-subtle) 100%);
+  padding: 16px 18px 12px;
+  border-bottom: none;
+  background: transparent;
   flex-wrap: wrap;
 }
 
@@ -3054,16 +3191,53 @@ a.atoms-back-btn {
 }
 
 /* ==========================================================================
-   HOME OVERVIEW — slim role-based dashboard
+   HOME OVERVIEW — mockup-aligned SaaS dashboard
    ========================================================================== */
 .atoms-home-desk {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
 }
 
 .atoms-home-kpis {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.atoms-home-kpis-more {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.atoms-home-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+  gap: 18px;
+  align-items: stretch;
+  animation: atoms-stage-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: 0.12s;
+}
+
+@keyframes atoms-stage-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.atoms-home-stage .atoms-chart-card,
+.atoms-home-hero-bottom .atoms-panel {
+  height: 100%;
+  animation: atoms-stage-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.atoms-home-hero-bottom {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr);
+  gap: 18px;
+  align-items: stretch;
 }
 
 .atoms-home-queues .atoms-panel-head {
@@ -3159,24 +3333,44 @@ a.atoms-back-btn {
   gap: 16px;
 }
 
+.atoms-chart-grid.atoms-chart-grid--home {
+  display: contents;
+}
+
 .atoms-chart-card {
-  background: #fff;
-  border: 1px solid var(--atoms-line);
-  border-radius: var(--atoms-r-lg, 12px);
-  padding: 12px 14px 8px;
+  background: var(--atoms-surface);
+  border: 1px solid transparent;
+  border-radius: 18px;
+  padding: 16px 18px 12px;
   min-width: 0;
+  box-shadow: var(--atoms-elevation-1);
+}
+
+.atoms-chart-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
 }
 
 .atoms-chart-card h3 {
-  margin: 0 0 8px;
-  font-size: 13px;
+  margin: 0;
+  font-size: 15px;
   font-weight: 700;
   color: var(--atoms-text-primary);
+  letter-spacing: -0.02em;
+}
+
+.atoms-chart-card-sub {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: var(--atoms-text-muted);
 }
 
 .atoms-chart-canvas {
   position: relative;
-  height: 200px;
+  height: 240px;
   width: 100%;
 }
 
@@ -3186,7 +3380,61 @@ a.atoms-back-btn {
 }
 
 .atoms-chart-canvas-donut {
-  height: 220px;
+  height: 260px;
+}
+
+.atoms-stock-pulse-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.atoms-stock-pulse-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 14px;
+  background: var(--atoms-surface-subtle);
+  border-radius: 14px;
+}
+
+.atoms-stock-pulse-stat .atoms-muted {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.atoms-stock-pulse-stat strong {
+  font-size: 1.65rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  color: var(--atoms-text-primary);
+  line-height: 1.1;
+}
+
+.atoms-status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: var(--atoms-r-full);
+  font-size: 11.5px;
+  font-weight: 700;
+  background: var(--atoms-accent-subtle);
+  color: var(--atoms-accent-text);
+}
+
+.atoms-status-pill.is-warn {
+  background: var(--atoms-warn-subtle);
+  color: var(--atoms-warn-text);
+}
+
+.atoms-status-pill.is-danger {
+  background: var(--atoms-danger-subtle);
+  color: var(--atoms-danger-text);
+}
+
+.atoms-status-pill.is-info {
+  background: var(--atoms-info-subtle);
+  color: var(--atoms-info-text);
 }
 
 .atoms-export-desk .atoms-pos-section-title {
@@ -3195,6 +3443,11 @@ a.atoms-back-btn {
 
 @media (max-width: 1100px) {
   .atoms-chart-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .atoms-home-stage,
+  .atoms-home-hero-bottom {
     grid-template-columns: 1fr;
   }
 }
@@ -3224,7 +3477,8 @@ a.atoms-back-btn {
 }
 
 @media (max-width: 1100px) {
-  .atoms-home-kpis {
+  .atoms-home-kpis,
+  .atoms-home-kpis-more {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -3241,12 +3495,18 @@ a.atoms-back-btn {
 }
 
 @media (max-width: 720px) {
-  .atoms-home-kpis {
+  .atoms-home-kpis,
+  .atoms-home-kpis-more {
     grid-template-columns: 1fr;
   }
 
   .atoms-home-cash-strip {
     grid-template-columns: 1fr;
+  }
+
+  .atoms-top-heading {
+    flex: 1 1 100%;
+    order: -1;
   }
 }
 

@@ -100,7 +100,7 @@ final class Pwa
                     'purpose' => 'any maskable',
                 ],
                 [
-                    'src'     => ATOMS_URL . 'assets/img/abutwins-mark.png',
+                    'src'     => ATOMS_URL . 'assets/img/abutwins-icon-512.png',
                     'sizes'   => '512x512',
                     'type'    => 'image/png',
                     'purpose' => 'any',
