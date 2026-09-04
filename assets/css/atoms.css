@@ -373,6 +373,13 @@ html.atoms-prefers-sidebar-collapsed .atoms-brand-logo-icon {
   transition: color 0.15s ease;
 }
 
+.atoms-nav a .atoms-nav-chevron {
+  margin-left: auto;
+  font-size: 16px !important;
+  color: #5B647A;
+  opacity: 0.7;
+}
+
 .atoms-nav a:hover {
   background: var(--atoms-side-hover);
   color: #ffffff;
@@ -383,14 +390,18 @@ html.atoms-prefers-sidebar-collapsed .atoms-brand-logo-icon {
 }
 
 .atoms-nav a.active {
-  background: var(--atoms-side-active);
+  background: rgba(255, 255, 255, 0.08);
   color: #ffffff;
   font-weight: 600;
-  box-shadow: inset 0 0 0 1px rgba(47, 53, 144, 0.35);
+  box-shadow: none;
 }
 
 .atoms-nav a.active .material-symbols-outlined {
-  color: #C5CAE8;
+  color: #ffffff;
+}
+
+.atoms-nav a.active .atoms-nav-chevron {
+  display: none;
 }
 
 /* Collapsed sidebar — icon rail with hover labels */
@@ -453,6 +464,10 @@ html.atoms-prefers-sidebar-collapsed .atoms-brand-logo-icon {
   justify-content: center;
   padding: 9px;
   gap: 0;
+}
+
+.atoms-root.sidebar-collapsed .atoms-nav a .atoms-nav-chevron {
+  display: none;
 }
 
 .atoms-root.sidebar-collapsed .atoms-brand-word {
@@ -562,19 +577,20 @@ html.atoms-prefers-sidebar-collapsed .atoms-brand-logo-icon {
 }
 
 .atoms-top {
-  min-height: 68px;
+  min-height: 64px;
   height: auto;
   display: flex;
-  gap: 12px 16px;
+  gap: 12px 14px;
   align-items: center;
-  flex-wrap: wrap;
-  padding: 12px 28px;
+  flex-wrap: nowrap;
+  padding: 10px 24px;
   border-bottom: 1px solid transparent;
   position: sticky;
   top: 0;
   z-index: 40;
   backdrop-filter: blur(14px);
-  background-color: rgba(244, 247, 254, 0.88);
+  background-color: rgba(244, 247, 254, 0.92);
+  overflow: hidden;
 }
 
 .atoms-top-heading {
@@ -582,15 +598,15 @@ html.atoms-prefers-sidebar-collapsed .atoms-brand-logo-icon {
   flex-direction: column;
   gap: 2px;
   min-width: 0;
-  flex: 0 1 auto;
-  margin-right: 4px;
+  flex: 1 1 auto;
+  margin-right: 8px;
 }
 
 .atoms-top-heading-title {
   margin: 0;
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 800;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.035em;
   color: var(--atoms-text-primary);
   line-height: 1.2;
   white-space: nowrap;
@@ -605,6 +621,27 @@ html.atoms-prefers-sidebar-collapsed .atoms-brand-logo-icon {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+body.atoms-route-dashboard .atoms-search {
+  max-width: 280px;
+  flex: 0 1 280px;
+}
+
+body.atoms-route-dashboard .atoms-clock-pill,
+body.atoms-route-dashboard #atoms-online,
+body.atoms-route-dashboard .atoms-bell-label,
+body.atoms-route-dashboard .atoms-kbd-hint {
+  display: none;
+}
+
+body.atoms-route-dashboard .atoms-quick-sale-btn span:not(.material-symbols-outlined) {
+  display: none;
+}
+
+body.atoms-route-dashboard .atoms-quick-sale-btn {
+  padding: 0 10px !important;
+  min-width: 36px;
 }
 
 .atoms-search {
@@ -807,17 +844,22 @@ html.atoms-prefers-sidebar-collapsed .atoms-brand-logo-icon {
    3. PAGE CONTAINER & HEADERS
    ========================================================================== */
 .atoms-page {
-  margin: 8px 20px 32px;
-  padding: 8px 8px 24px;
+  margin: 4px 20px 20px;
+  padding: 4px 4px 12px;
   max-width: none;
   box-sizing: border-box;
   position: relative;
   contain: layout style;
-  min-height: calc(100vh - 100px);
+  min-height: 0;
   background: transparent;
   border: none;
   border-radius: 0;
   box-shadow: none;
+}
+
+body.atoms-route-dashboard .atoms-page {
+  margin: 0 20px 16px;
+  padding: 0 4px 8px;
 }
 
 .atoms-page.is-entering {
@@ -966,60 +1008,78 @@ html.atoms-prefers-sidebar-collapsed .atoms-brand-logo-icon {
 
 .atoms-header-row {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-}
-
-.atoms-breadcrumb {
-  display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--atoms-text-muted);
-  margin-bottom: 4px;
-  font-weight: 500;
+  justify-content: space-between;
+  gap: 12px 16px;
+  margin-bottom: 16px;
+  flex-wrap: nowrap;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
 }
 
-.atoms-breadcrumb span.current {
-  color: var(--atoms-text-primary);
-  font-weight: 600;
+.atoms-page-intro {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 
 .atoms-h1 {
   font-family: var(--atoms-font-sans);
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 800;
   letter-spacing: -0.035em;
   color: var(--atoms-text-primary);
   margin: 0;
-}
-
-.atoms-page-shell.is-compact .atoms-header-row {
-  margin-bottom: 12px;
-}
-
-.atoms-page-shell.is-compact .atoms-h1 {
-  font-size: 22px;
-}
-
-.atoms-page-shell.is-compact .atoms-breadcrumb {
-  display: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .atoms-sub {
   color: var(--atoms-text-secondary);
-  font-size: 13.5px;
+  font-size: 13px;
   margin: 2px 0 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .atoms-header-actions {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+}
+
+.atoms-page-shell.is-compact .atoms-header-row {
+  margin-bottom: 10px;
+}
+
+.atoms-page-shell.is-compact .atoms-h1 {
+  font-size: 20px;
+}
+
+.atoms-page-shell.is-compact .atoms-breadcrumb {
+  display: none;
+}
+
+/* Dashboard: title lives in top bar (mockup); avoid duplicate/overflowing page header */
+body.atoms-route-dashboard .atoms-page-shell .atoms-page-intro {
+  display: none;
+}
+
+body.atoms-route-dashboard .atoms-page-shell .atoms-header-row {
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+body.atoms-route-dashboard .atoms-page-shell:not(:has(.atoms-header-actions)) {
+  display: none;
 }
 
 /* ==========================================================================
@@ -1872,8 +1932,8 @@ html.atoms-prefers-sidebar-collapsed .atoms-brand-logo-icon {
 
   .atoms-page {
     margin: 10px;
-    padding: 14px;
-    min-height: calc(100vh - 92px);
+    padding: 12px;
+    min-height: 0;
     border-radius: var(--atoms-r-xl);
   }
 }
@@ -1905,6 +1965,23 @@ html.atoms-prefers-sidebar-collapsed .atoms-brand-logo-icon {
 
 .atoms-page-intro {
   min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.atoms-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--atoms-text-muted);
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+
+.atoms-breadcrumb span.current {
+  color: var(--atoms-text-primary);
+  font-weight: 600;
 }
 
 .atoms-back-bar {
@@ -1993,7 +2070,7 @@ a.atoms-back-btn {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 
 .atoms-attention-pill {
@@ -2264,7 +2341,7 @@ a.atoms-back-btn {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
   gap: 12px;
-  margin-bottom: 22px;
+  margin-bottom: 4px;
 }
 
 .atoms-quick-action {
@@ -2477,16 +2554,17 @@ a.atoms-back-btn {
 
 .atoms-header-row {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  margin-bottom: 18px;
-  padding: 18px 20px;
-  border-radius: var(--atoms-r-xl);
-  background: var(--atoms-surface);
-  border: 1px solid var(--atoms-line);
-  box-shadow: var(--atoms-elevation-1);
+  gap: 12px 16px;
+  flex-wrap: nowrap;
+  margin-bottom: 16px;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .atoms-presets {
@@ -3196,24 +3274,26 @@ a.atoms-back-btn {
 .atoms-home-desk {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
 }
 
 .atoms-home-kpis {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .atoms-home-kpis-more {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .atoms-home-stage {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
-  gap: 18px;
+  gap: 14px;
   align-items: stretch;
   animation: atoms-stage-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
-  animation-delay: 0.12s;
+  animation-delay: 0.08s;
 }
 
 @keyframes atoms-stage-in {
@@ -3236,7 +3316,7 @@ a.atoms-back-btn {
 .atoms-home-hero-bottom {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr);
-  gap: 18px;
+  gap: 14px;
   align-items: stretch;
 }
 
@@ -3411,6 +3491,56 @@ a.atoms-back-btn {
   line-height: 1.1;
 }
 
+/* Mockup-style single hero metric */
+.atoms-stock-pulse-hero {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  min-height: 180px;
+  padding: 8px 4px 4px;
+}
+
+.atoms-stock-pulse-hero .atoms-muted {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--atoms-text-secondary);
+}
+
+.atoms-stock-pulse-hero strong {
+  font-size: clamp(2.6rem, 2rem + 2vw, 3.4rem);
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  color: var(--atoms-text-primary);
+  line-height: 1;
+}
+
+.atoms-stock-pulse-hero-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.atoms-stock-pulse-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.atoms-stock-pulse-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--atoms-surface-subtle);
+  color: var(--atoms-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .atoms-status-pill {
   display: inline-flex;
   align-items: center;
@@ -3474,6 +3604,279 @@ a.atoms-back-btn {
 .atoms-analytics-intro a {
   color: inherit;
   font-weight: 700;
+}
+
+/* —— Analytics desk (charts-first, dense, responsive) —— */
+.atoms-analytics-desk {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 4px;
+}
+
+.atoms-analytics-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  align-self: flex-start;
+  background: color-mix(in srgb, var(--atoms-canvas, #f4f6fb) 92%, transparent);
+  backdrop-filter: blur(8px);
+  padding: 4px;
+  border-radius: 12px;
+}
+
+.atoms-analytics-tabs .atoms-seg-tab .material-symbols-outlined {
+  font-size: 18px;
+  margin-right: 4px;
+  vertical-align: -3px;
+}
+
+.atoms-analytics-pane {
+  min-width: 0;
+}
+
+.atoms-analytics-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.atoms-analytics-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(240px, 1fr);
+  gap: 14px;
+  align-items: stretch;
+  margin-bottom: 14px;
+  animation: atoms-stage-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.atoms-analytics-stage-side {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 14px;
+  min-height: 0;
+}
+
+.atoms-analytics-stage .atoms-chart-card,
+.atoms-analytics-stage-side .atoms-chart-card {
+  min-height: 0;
+  height: 100%;
+}
+
+.atoms-analytics-stage .atoms-chart-canvas {
+  height: 260px;
+}
+
+.atoms-analytics-stage-side .atoms-chart-canvas-donut {
+  height: 160px;
+}
+
+.atoms-analytics-health {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.atoms-analytics-section {
+  background: var(--atoms-surface, #fff);
+  border: 1px solid var(--atoms-border, #e2e8f0);
+  border-radius: 14px;
+  padding: 12px 14px;
+  min-width: 0;
+}
+
+.atoms-analytics-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.atoms-analytics-section-head h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--atoms-text-primary, #0f172a);
+}
+
+.atoms-analytics-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 8px;
+}
+
+.atoms-analytics-tiles--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.atoms-analytics-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 11px;
+  border-radius: 10px;
+  background: var(--atoms-canvas, #f4f6fb);
+  border: 1px solid transparent;
+  min-width: 0;
+}
+
+.atoms-analytics-tile.is-warn {
+  background: color-mix(in srgb, #f59e0b 12%, #fff);
+  border-color: color-mix(in srgb, #f59e0b 28%, transparent);
+}
+
+.atoms-analytics-tile.is-danger {
+  background: color-mix(in srgb, #e11d48 10%, #fff);
+  border-color: color-mix(in srgb, #e11d48 24%, transparent);
+}
+
+.atoms-analytics-tile-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--atoms-text-muted, #647089);
+  line-height: 1.3;
+}
+
+.atoms-analytics-tile-value {
+  font-size: 1.15rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: var(--atoms-text-primary, #0f172a);
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.atoms-analytics-tile-muted {
+  font-size: 11px;
+  color: var(--atoms-text-muted, #647089);
+  line-height: 1.35;
+}
+
+.atoms-analytics-jump {
+  margin: 8px 0 0;
+  text-align: center;
+}
+
+.atoms-analytics-details-lead {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--atoms-text-secondary, #3d4a63);
+}
+
+/* Dense nested metric cards inside Full desk */
+.atoms-analytics-desk .atoms-analytics-pane[data-analytics-pane="details"] > .atoms-card {
+  padding: 14px 16px;
+  margin-bottom: 12px !important;
+}
+
+.atoms-analytics-desk .atoms-analytics-pane[data-analytics-pane="details"] > .atoms-card > h3 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--atoms-text-muted, #647089);
+}
+
+.atoms-analytics-desk .atoms-card .atoms-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 8px;
+}
+
+.atoms-analytics-desk .atoms-card .atoms-grid > .atoms-card {
+  margin: 0;
+  padding: 10px 12px;
+  box-shadow: none;
+  border: 1px solid var(--atoms-border, #e2e8f0);
+  background: var(--atoms-canvas, #f4f6fb);
+  border-radius: 10px;
+}
+
+.atoms-analytics-desk .atoms-card .atoms-grid > .atoms-card h3 {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--atoms-text-muted, #647089);
+}
+
+.atoms-analytics-desk .atoms-card .atoms-grid > .atoms-card .atoms-metric {
+  font-size: 1.2rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.atoms-analytics-desk .atoms-card .atoms-grid > .atoms-card .atoms-muted {
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.atoms-analytics-desk .atoms-row {
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+body.atoms-route-analytics .atoms-page-shell .atoms-page-intro {
+  margin-bottom: 8px;
+}
+
+@media (max-width: 1100px) {
+  .atoms-analytics-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .atoms-analytics-stage {
+    grid-template-columns: 1fr;
+  }
+
+  .atoms-analytics-stage-side {
+    grid-template-rows: none;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .atoms-analytics-health {
+    grid-template-columns: 1fr;
+  }
+
+  .atoms-analytics-stage .atoms-chart-canvas {
+    height: 220px;
+  }
+}
+
+@media (max-width: 720px) {
+  .atoms-analytics-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .atoms-analytics-stage-side {
+    grid-template-columns: 1fr;
+  }
+
+  .atoms-analytics-tiles--3 {
+    grid-template-columns: 1fr;
+  }
+
+  .atoms-analytics-tabs {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .atoms-analytics-desk .atoms-card .atoms-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 420px) {
+  .atoms-analytics-desk .atoms-card .atoms-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 1100px) {
@@ -3578,6 +3981,57 @@ a.atoms-back-btn {
   color: var(--atoms-text-muted);
   flex-shrink: 0;
   cursor: grab;
+}
+
+.atoms-setup-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.atoms-setup-list li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--atoms-surface-subtle);
+}
+
+.atoms-setup-list li .material-symbols-outlined {
+  font-size: 22px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.atoms-setup-list li.is-done .material-symbols-outlined {
+  color: var(--atoms-accent);
+}
+
+.atoms-setup-list li.is-todo .material-symbols-outlined {
+  color: var(--atoms-text-muted);
+}
+
+.atoms-setup-list strong {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 2px;
+}
+
+.atoms-setup-list a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.atoms-setup-list a:hover {
+  color: var(--atoms-primary);
+}
+
+.atoms-setup-list p {
+  margin: 0;
 }
 
 .atoms-home-customize-bar {

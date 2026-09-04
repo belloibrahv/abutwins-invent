@@ -956,7 +956,10 @@
 
     updateNavActive(page());
     syncOnline();
-    if (page() !== 'dashboard') {
+    document.body.classList.toggle('atoms-route-analytics', page() === 'analytics');
+    if (page() === 'analytics') {
+      setTopHeading('Analytics desk', '');
+    } else if (page() !== 'dashboard') {
       setTopHeading('', '');
     }
 
@@ -5476,26 +5479,122 @@
   async function screenAnalytics() {
     const data = await api(`analytics?days=14&branch_id=${state.branchId || ''}`);
     const aging = data.aging?.buckets || {};
+    const ex = data.executive_snapshot || {};
+    const ops = data.operations_snapshot || {};
+    const intake = data.intake_snapshot || {};
+    const cashToday = data.today_cash_snapshot || {};
+    const activeTab = state.analyticsTab || 'overview';
+    const trend = data.trend_lines || data.trend || [];
+    const mix = data.payment_mix_lines || data.mix || [];
+    const saleTypes = data.sale_type_lines || data.sale_types || [];
+    const tabBtn = (id, label, icon) => `<button type="button" class="atoms-seg-tab js-analytics-tab${activeTab === id ? ' is-active' : ''}" data-analytics-tab="${id}" role="tab" aria-selected="${activeTab === id ? 'true' : 'false'}"><span class="material-symbols-outlined" aria-hidden="true">${icon}</span>${label}</button>`;
+    const opsLoad = (ops.open_repair_count || 0) + (ops.pending_approval_count || 0) + (ops.in_transit_count || 0);
+
     return `
       ${pageShell({
         group: 'Money & reports',
         trail: 'Trends & charts',
-        title: 'Trends & performance',
-        subtitle: 'Full 14-day business desk — snapshots, charts, receivables, payables, inventory, and team performance (moved from the home overview).',
-        actions: '<a class="atoms-back-btn" href="#/dashboard"><span class="material-symbols-outlined">arrow_back</span><span>Back to overview</span></a><a class="atoms-btn ghost sm" href="#/reports"><span class="material-symbols-outlined">summarize</span> Open reports</a>',
+        title: 'Analytics desk',
+        subtitle: 'Charts first, then drill into money, stock, operations, and performance — last 14 days.',
+        actions: '<a class="atoms-back-btn" href="#/dashboard"><span class="material-symbols-outlined">arrow_back</span><span>Back to overview</span></a><a class="atoms-btn ghost sm" href="#/reports"><span class="material-symbols-outlined">summarize</span> Reports</a>',
       })}
-      <div class="atoms-flash info atoms-analytics-intro">
-        <span class="material-symbols-outlined" aria-hidden="true">info</span>
-        <span>Detailed metrics and historical tables live here. The <a href="#/dashboard">store overview</a> shows only today’s pulse and work queues.</span>
-      </div>
-      ${data.today_cash_snapshot ? `<div class="atoms-card" style="margin-bottom:16px">
-        <h3>Cash today</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Cash in</h3><div class="atoms-metric">${money(data.today_cash_snapshot.inflows || 0)}</div></div>
-          <div class="atoms-card"><h3>Outflows</h3><div class="atoms-metric">${money(data.today_cash_snapshot.outflows || 0)}</div></div>
-          <div class="atoms-card"><h3>Net</h3><div class="atoms-metric">${money(data.today_cash_snapshot.net || 0)}</div></div>
+      <div class="atoms-analytics-desk">
+        <div class="atoms-analytics-tabs atoms-seg-tabs" role="tablist" aria-label="Analytics views">
+          ${tabBtn('overview', 'Overview', 'monitoring')}
+          ${tabBtn('details', 'Full desk', 'table_chart')}
         </div>
-      </div>` : ''}
+
+        <div class="atoms-analytics-pane${activeTab === 'overview' ? '' : ' hidden'}" data-analytics-pane="overview">
+          <div class="atoms-analytics-kpi-grid">
+            ${kpiCard('Sales today', money(ex.sales_today_total || 0), kpiTrendFoot(`${ex.sales_today_count || 0} invoice(s)`), '', 'point_of_sale')}
+            ${kpiCard('Net cash today', money(ex.cash_net_today || cashToday.net || 0), kpiTrendFoot('In minus out'), Number(ex.cash_net_today || cashToday.net || 0) < 0 ? 'danger' : 'ok', 'account_balance_wallet')}
+            ${kpiCard('Receivables', money(ex.receivable_total || 0), kpiTrendFoot(`${ex.overdue_count || 0} overdue · ${money(ex.overdue_total || 0)}`), Number(ex.overdue_count || 0) > 0 ? 'warn' : '', 'trending_up')}
+            ${kpiCard('Ops load', opsLoad, kpiTrendFoot(`${ops.open_repair_count || 0} repairs · ${ops.pending_approval_count || 0} approvals · ${ops.in_transit_count || 0} transit`), ((ops.open_repair_count || 0) + (ops.pending_approval_count || 0)) > 0 ? 'warn' : 'ok', 'hub')}
+          </div>
+
+          <div class="atoms-analytics-stage">
+            <div class="atoms-chart-card">
+              <div class="atoms-chart-card-head">
+                <div>
+                  <h3>Sales trend</h3>
+                  <p class="atoms-chart-card-sub">Net sales · last 14 days</p>
+                </div>
+                <a class="atoms-btn ghost sm" href="#/reports">Open reports</a>
+              </div>
+              ${barChart(trend, 'net', 'date', 'Net sales', { home: true })}
+            </div>
+            <div class="atoms-analytics-stage-side">
+              <div class="atoms-chart-card">
+                <div class="atoms-chart-card-head">
+                  <div>
+                    <h3>Payment mix</h3>
+                    <p class="atoms-chart-card-sub">Collected by method</p>
+                  </div>
+                </div>
+                ${doughnutChart(mix, 'collected', 'method', 'Collected', { home: true })}
+              </div>
+              <div class="atoms-chart-card">
+                <div class="atoms-chart-card-head">
+                  <div>
+                    <h3>Channel mix</h3>
+                    <p class="atoms-chart-card-sub">Retail vs wholesale</p>
+                  </div>
+                </div>
+                ${doughnutChart(saleTypes, 'net', 'label', 'Channels', { home: true })}
+              </div>
+            </div>
+          </div>
+
+          <div class="atoms-analytics-health">
+            <section class="atoms-analytics-section">
+              <header class="atoms-analytics-section-head">
+                <h3>Cash today</h3>
+                <span class="atoms-muted">Branch pulse</span>
+              </header>
+              <div class="atoms-analytics-tiles atoms-analytics-tiles--3">
+                <div class="atoms-analytics-tile"><span class="atoms-analytics-tile-label">Cash in</span><span class="atoms-analytics-tile-value">${money(cashToday.inflows || 0)}</span></div>
+                <div class="atoms-analytics-tile"><span class="atoms-analytics-tile-label">Outflows</span><span class="atoms-analytics-tile-value">${money(cashToday.outflows || 0)}</span></div>
+                <div class="atoms-analytics-tile"><span class="atoms-analytics-tile-label">Net</span><span class="atoms-analytics-tile-value">${money(cashToday.net || 0)}</span></div>
+              </div>
+            </section>
+            <section class="atoms-analytics-section">
+              <header class="atoms-analytics-section-head">
+                <h3>Intake & receiving</h3>
+                <span class="atoms-muted">Today</span>
+              </header>
+              <div class="atoms-analytics-tiles">
+                <div class="atoms-analytics-tile"><span class="atoms-analytics-tile-label">Purchases</span><span class="atoms-analytics-tile-value">${intake.purchase_count || 0}</span><span class="atoms-analytics-tile-muted">${money(intake.purchase_total || 0)}</span></div>
+                <div class="atoms-analytics-tile"><span class="atoms-analytics-tile-label">IMEIs registered</span><span class="atoms-analytics-tile-value">${intake.imei_count || 0}</span></div>
+                <div class="atoms-analytics-tile"><span class="atoms-analytics-tile-label">Inbound reserved</span><span class="atoms-analytics-tile-value">${intake.inbound_reserved_count || 0}</span><span class="atoms-analytics-tile-muted">awaiting receipt</span></div>
+                <div class="atoms-analytics-tile"><span class="atoms-analytics-tile-label">Supplier payments</span><span class="atoms-analytics-tile-value">${intake.supplier_payment_count || 0}</span><span class="atoms-analytics-tile-muted">${money(intake.supplier_payment_total || 0)}</span></div>
+                <div class="atoms-analytics-tile"><span class="atoms-analytics-tile-label">Swaps</span><span class="atoms-analytics-tile-value">${intake.swap_count || 0}</span><span class="atoms-analytics-tile-muted">${money(intake.swap_collected || 0)}</span></div>
+              </div>
+            </section>
+            <section class="atoms-analytics-section">
+              <header class="atoms-analytics-section-head">
+                <h3>Operations queue</h3>
+                <span class="atoms-muted">Needs attention</span>
+              </header>
+              <div class="atoms-analytics-tiles">
+                <div class="atoms-analytics-tile${(ops.open_repair_count || 0) > 0 ? ' is-warn' : ''}"><span class="atoms-analytics-tile-label">Open repairs</span><span class="atoms-analytics-tile-value">${ops.open_repair_count || 0}</span></div>
+                <div class="atoms-analytics-tile${(ops.pending_approval_count || 0) > 0 ? ' is-warn' : ''}"><span class="atoms-analytics-tile-label">Pending approvals</span><span class="atoms-analytics-tile-value">${ops.pending_approval_count || 0}</span></div>
+                <div class="atoms-analytics-tile"><span class="atoms-analytics-tile-label">In transit</span><span class="atoms-analytics-tile-value">${ops.in_transit_count || 0}</span></div>
+                <div class="atoms-analytics-tile"><span class="atoms-analytics-tile-label">Open stock counts</span><span class="atoms-analytics-tile-value">${ops.open_stock_count_count || 0}</span></div>
+                <div class="atoms-analytics-tile${(ops.faulty_device_count || 0) > 0 ? ' is-danger' : ''}"><span class="atoms-analytics-tile-label">Faulty devices</span><span class="atoms-analytics-tile-value">${ops.faulty_device_count || 0}</span></div>
+                <div class="atoms-analytics-tile"><span class="atoms-analytics-tile-label">Pending expenses</span><span class="atoms-analytics-tile-value">${ops.pending_expense_count || 0}</span><span class="atoms-analytics-tile-muted">${money(ops.pending_expense_total || 0)}</span></div>
+              </div>
+            </section>
+          </div>
+
+          <p class="atoms-analytics-jump">
+            <button type="button" class="atoms-btn ghost sm js-analytics-tab" data-analytics-tab="details">
+              <span class="material-symbols-outlined">unfold_more</span> Browse full desk
+            </button>
+          </p>
+        </div>
+
+        <div class="atoms-analytics-pane${activeTab === 'details' ? '' : ' hidden'}" data-analytics-pane="details">
+          <p class="atoms-analytics-details-lead">All snapshots and line tables for this branch. Scroll or use section headings to find money, stock, ops, and team metrics.</p>
       ${(data.today_sales_lines || []).length ? `<div class="atoms-card" style="margin-bottom:16px">
         <h3>Sales today</h3>
         <table class="atoms-table"><thead><tr><th>Invoice</th><th>Customer</th><th>Devices</th><th>Total</th><th>Paid</th></tr></thead><tbody>
@@ -5508,16 +5607,6 @@
           </tr>`).join('')}
         </tbody></table>
       </div>` : ''}
-      ${data.intake_snapshot ? `<div class="atoms-card" style="margin-bottom:16px">
-        <h3>Intake & receiving (today)</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Purchases</h3><div class="atoms-metric">${data.intake_snapshot.purchase_count || 0}<div class="atoms-muted">${money(data.intake_snapshot.purchase_total || 0)}</div></div></div>
-          <div class="atoms-card"><h3>IMEIs registered</h3><div class="atoms-metric">${data.intake_snapshot.imei_count || 0}</div></div>
-          <div class="atoms-card"><h3>Inbound reserved</h3><div class="atoms-metric">${data.intake_snapshot.inbound_reserved_count || 0}<div class="atoms-muted">manifest units awaiting receipt</div></div></div>
-          <div class="atoms-card"><h3>Supplier payments</h3><div class="atoms-metric">${data.intake_snapshot.supplier_payment_count || 0}<div class="atoms-muted">${money(data.intake_snapshot.supplier_payment_total || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Swaps</h3><div class="atoms-metric">${data.intake_snapshot.swap_count || 0}<div class="atoms-muted">${money(data.intake_snapshot.swap_collected || 0)}</div></div></div>
-        </div>
-      </div>` : ''}
       ${(data.today_purchase_lines || []).length ? `<div class="atoms-card" style="margin-bottom:16px">
         <h3>Purchases today</h3>
         <table class="atoms-table"><thead><tr><th>Supplier</th><th>PO invoice</th><th>Items</th><th>Total</th></tr></thead><tbody>
@@ -5528,23 +5617,6 @@
             <td>${money(l.total)}</td>
           </tr>`).join('')}
         </tbody></table>
-      </div>` : ''}
-      ${data.operations_snapshot ? `<div class="atoms-card" style="margin-bottom:16px">
-        <h3>Operations queue</h3>
-        <div class="atoms-grid">
-          <div class="atoms-card"><h3>Open repairs</h3><div class="atoms-metric">${data.operations_snapshot.open_repair_count || 0}</div></div>
-          <div class="atoms-card"><h3>Pending approvals</h3><div class="atoms-metric">${data.operations_snapshot.pending_approval_count || 0}</div></div>
-          <div class="atoms-card"><h3>In transit</h3><div class="atoms-metric">${data.operations_snapshot.in_transit_count || 0}</div></div>
-          <div class="atoms-card"><h3>Open stock counts</h3><div class="atoms-metric">${data.operations_snapshot.open_stock_count_count || 0}</div></div>
-          <div class="atoms-card"><h3>Faulty devices</h3><div class="atoms-metric">${data.operations_snapshot.faulty_device_count || 0}</div></div>
-          <div class="atoms-card"><h3>Pending expenses</h3><div class="atoms-metric">${data.operations_snapshot.pending_expense_count || 0}<div class="atoms-muted">${money(data.operations_snapshot.pending_expense_total || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Open purchases</h3><div class="atoms-metric">${data.operations_snapshot.open_purchase_count || 0}<div class="atoms-muted">${money(data.operations_snapshot.open_purchase_total || 0)}</div></div></div>
-          <div class="atoms-card"><h3>Inbound reserved</h3><div class="atoms-metric">${data.operations_snapshot.inbound_reserved_count || 0}</div></div>
-          <div class="atoms-card"><h3>Accessory stock</h3><div class="atoms-metric">${data.operations_snapshot.quantity_stock_qty || 0}<div class="atoms-muted">${data.operations_snapshot.quantity_sku_count || 0} SKUs</div></div></div>
-          <div class="atoms-card"><h3>Stuck repairs</h3><div class="atoms-metric">${data.operations_snapshot.stuck_repair_count || 0}</div></div>
-          <div class="atoms-card"><h3>Stuck transfers</h3><div class="atoms-metric">${data.operations_snapshot.stuck_transfer_count || 0}</div></div>
-          <div class="atoms-card"><h3>Stuck faulty</h3><div class="atoms-metric">${data.operations_snapshot.stuck_faulty_count || 0}</div></div>
-        </div>
       </div>` : ''}
       ${(data.today_transfer_lines || []).length ? `<div class="atoms-card" style="margin-bottom:16px">
         <h3>Transfers today</h3>
@@ -6302,10 +6374,6 @@
           <div class="atoms-card"><h3>Swaps & mix</h3><div class="atoms-metric">${data.tradeflow_snapshot.swap_14d_count || 0}<div class="atoms-muted">${money(data.tradeflow_snapshot.swap_collected_14d || 0)} collected · ${data.tradeflow_snapshot.retail_share_pct || 0}% retail · ${data.tradeflow_snapshot.wholesale_share_pct || 0}% wholesale</div></div></div>
         </div>
       </div>` : ''}
-      <div class="atoms-card">
-        <h3>Sales trend</h3>
-        ${barChart(data.trend_lines || data.trend || [], 'net', 'date')}
-      </div>
       ${data.cash_snapshot ? `<div class="atoms-card" style="margin-bottom:16px">
         <h3>Cash flow (14 days)</h3>
         <div class="atoms-grid">
@@ -6843,7 +6911,6 @@
         </div>
         <div class="atoms-card">
           <h3>Payment mix</h3>
-          ${barChart(data.payment_mix_lines || data.mix || [], 'collected', 'method')}
           <table class="atoms-table"><thead><tr><th>Method</th><th>Invoices</th><th>Collected</th></tr></thead><tbody>
             ${(data.payment_mix_lines || data.mix || []).map((m) => `<tr><td>${escapeHtml(m.method)}</td><td>${m.invoices}</td><td>${money(m.collected)}</td></tr>`).join('') || '<tr><td colspan="3">None</td></tr>'}
           </tbody></table>
@@ -6878,6 +6945,8 @@
               <td>${money(l.selling_price)}</td>
             </tr>`).join('') || '<tr><td colspan="6">No device sales in this window.</td></tr>'}
           </tbody></table>
+        </div>
+      </div>
         </div>
       </div>`;
   }
@@ -7027,7 +7096,7 @@
   function doughnutChart(rows, key, labelKey, title = 'Mix', opts = {}) {
     if (!rows || !rows.length) return '<p class="atoms-muted">Nothing to chart yet.</p>';
     const chartId = `atoms-chart-${++chartCounter}`;
-    const labels = rows.map((r) => r[labelKey] || r.method || r.name || '');
+    const labels = rows.map((r) => r[labelKey] || r.method || r.name || r.label || r.type || '');
     const dataVals = rows.map((r) => Number(r[key] || 0) / 100);
     mountChart(chartId, {
       type: 'doughnut',
@@ -7672,6 +7741,30 @@
         document.querySelectorAll('.atoms-home-queue-pane').forEach((pane) => {
           pane.classList.toggle('hidden', pane.dataset.queuePane !== queue);
         });
+      });
+    });
+
+    document.querySelectorAll('.js-analytics-tab').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const tab = btn.dataset.analyticsTab || 'overview';
+        state.analyticsTab = tab;
+        document.querySelectorAll('.js-analytics-tab').forEach((el) => {
+          const active = el.dataset.analyticsTab === tab;
+          el.classList.toggle('is-active', active);
+          if (el.getAttribute('role') === 'tab') el.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+        document.querySelectorAll('.atoms-analytics-pane').forEach((pane) => {
+          pane.classList.toggle('hidden', pane.dataset.analyticsPane !== tab);
+        });
+        if (tab === 'overview') {
+          // Remount charts after pane becomes visible
+          requestAnimationFrame(() => {
+            document.querySelectorAll('.atoms-analytics-pane[data-analytics-pane="overview"] canvas').forEach((canvas) => {
+              const chart = window.Chart?.getChart?.(canvas);
+              if (chart) chart.resize();
+            });
+          });
+        }
       });
     });
 

@@ -77,17 +77,34 @@ make smoke
 - Expenses: categories, threshold approval, then ledger posting
 - Approvals engine: price overrides and expenses above ₦50,000
 
-## Staff setup
+## Branches & staff setup
 
-1. In WordPress, create a user.
-2. Assign a staff role (`Cashier`, `Vault Manager`, `Engineer`, etc.).
-3. In Abu Twins Invent → Settings, attach that user to one or more branches.
+Do this in **Abu Twins Invent → Settings** (CEO / Administrator):
+
+1. **Branches** — Add each store location (name + short code like `IBD`, `LAG`). Inactive branches stay in history but leave the branch switcher.
+2. **Staff** — Create worker accounts with role + branch checkboxes, or change roles later from the staff table.
+3. **Theme** — Upload `dist/abutwins-theme.zip`, activate **Abu Twins Retail**, then build the public storefront with Elementor using Abu Twins Invent widgets / shortcodes.
+
+Alternate staff path: WordPress → Users → Add User → assign an atoms role → Settings → attach branches.
+
+Password resets stay in WordPress → Users. Invent does not email passwords.
+
+## Plugin + theme
+
+| Package | Purpose |
+|---------|---------|
+| `dist/abutwins-invent.zip` | Operations: inventory, POS, staff, money, audit |
+| `dist/abutwins-theme.zip` | Public storefront chrome (Elementor canvas) |
+
+Activate the plugin first, then the theme. The theme detects the plugin and surfaces stock lookup, warranty, trade-in, and branch showcase widgets.
 
 ## API
 
 WordPress REST namespace: `/wp-json/atoms/v1/`
 
 Phase 3 routes: `/analytics`, `/notifications`, `/notifications/{id}/read`, `/settings`, `/outbox`.
+
+Branch admin: `GET/POST /branches`, `POST /branches/{id}`. Staff: `POST /users`, `POST /users/{id}`, `POST /users/{id}/branches`.
 
 ## Phase 3
 

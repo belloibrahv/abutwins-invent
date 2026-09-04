@@ -55,6 +55,8 @@ final class AuditLabel
             'customer.restored'         => 'Customer restored',
             'import.ran'                => 'CSV import',
             'automation.ran'            => 'Automation ran',
+            'branch.created'            => 'Branch created',
+            'branch.updated'            => 'Branch updated',
             default                     => ucfirst(trim(str_replace(['.', '_'], ' ', $action))),
         };
     }

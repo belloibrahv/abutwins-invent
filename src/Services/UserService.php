@@ -106,6 +106,81 @@ final class UserService
     }
 
     /**
+     * Update staff display name and/or role. Does not change WordPress administrators
+     * or invent passwords (use WP Users for password resets).
+     *
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    public function updateStaff(int $userId, array $data): array
+    {
+        $user = get_user_by('id', $userId);
+        if (!$user) {
+            throw new DomainException('User not found.');
+        }
+
+        $roles = (array) $user->roles;
+        if (in_array('administrator', $roles, true) && !current_user_can('manage_options')) {
+            throw new DomainException('Only a WordPress administrator can edit admin accounts.');
+        }
+
+        $updates = ['ID' => $userId];
+        if (isset($data['name']) && trim((string) $data['name']) !== '') {
+            $updates['display_name'] = sanitize_text_field((string) $data['name']);
+        }
+        if (isset($data['email']) && trim((string) $data['email']) !== '') {
+            $email = sanitize_email((string) $data['email']);
+            if ($email === '') {
+                throw new DomainException('Enter a valid email address.');
+            }
+            $owner = email_exists($email);
+            if ($owner && (int) $owner !== $userId) {
+                throw new DomainException('That email is already in use.');
+            }
+            $updates['user_email'] = $email;
+        }
+        if (count($updates) > 1) {
+            $result = wp_update_user($updates);
+            if (is_wp_error($result)) {
+                throw new DomainException((string) $result->get_error_message());
+            }
+        }
+
+        if (isset($data['role']) && (string) $data['role'] !== '') {
+            $role = sanitize_key((string) $data['role']);
+            if (!isset(Capabilities::ROLES[$role])) {
+                throw new DomainException('Choose a valid staff role.');
+            }
+            if (in_array('administrator', $roles, true)) {
+                throw new DomainException('Change WordPress administrator roles in Users → All Users.');
+            }
+            $wpUser = new \WP_User($userId);
+            $wpUser->set_role($role);
+        }
+
+        if (isset($data['branch_ids']) && is_array($data['branch_ids'])) {
+            $this->assignBranches(
+                $userId,
+                array_map('intval', $data['branch_ids']),
+                isset($data['default_branch_id']) ? (int) $data['default_branch_id'] : null
+            );
+        }
+
+        $fresh = get_userdata($userId);
+        $primary = $this->primaryRole((array) ($fresh->roles ?? []));
+
+        return [
+            'id'         => $userId,
+            'name'       => $fresh->display_name,
+            'email'      => $fresh->user_email,
+            'username'   => $fresh->user_login,
+            'roles'      => $fresh->roles,
+            'role_label' => $this->roleLabel($primary),
+            'branches'   => $this->branchesFor($userId),
+        ];
+    }
+
+    /**
      * @param list<int> $branchIds
      * @return list<array<string, mixed>>
      */

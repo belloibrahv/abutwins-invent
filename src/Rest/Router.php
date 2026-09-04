@@ -86,6 +86,9 @@ final class Router
         $this->post($ns, '/branches', 'atoms_manage_settings', function (WP_REST_Request $r) {
             return Http::ok((new BranchService())->save(null, Http::json($r)), 201);
         });
+        $this->post($ns, '/branches/(?P<id>\d+)', 'atoms_manage_settings', function (WP_REST_Request $r) {
+            return Http::ok((new BranchService())->save((int) $r['id'], Http::json($r)));
+        });
 
         // Public Frontend / Elementor Endpoints
         $this->publicGet($ns, '/public/warranty', function (WP_REST_Request $r) {
@@ -451,6 +454,9 @@ final class Router
         $this->post($ns, '/users', 'atoms_manage_settings', function (WP_REST_Request $r) {
             return Http::ok((new UserService())->createStaff(Http::json($r)), 201);
         });
+        $this->post($ns, '/users/(?P<id>\d+)', 'atoms_manage_settings', function (WP_REST_Request $r) {
+            return Http::ok((new UserService())->updateStaff((int) $r['id'], Http::json($r)));
+        });
         $this->post($ns, '/users/(?P<id>\d+)/branches', 'atoms_manage_settings', function (WP_REST_Request $r) {
             $body = Http::json($r);
             return Http::ok((new UserService())->assignBranches(
@@ -489,11 +495,11 @@ final class Router
     {
         $ctx = new Context();
         $user = wp_get_current_user();
-        $allBranches = (new BranchService())->all(false);
+        $activeBranches = (new BranchService())->all(true);
         $mine = $ctx->branchIds();
         $visible = current_user_can('atoms_all_branches')
-            ? $allBranches
-            : array_values(array_filter($allBranches, static fn($b) => in_array((int) $b['id'], $mine, true)));
+            ? $activeBranches
+            : array_values(array_filter($activeBranches, static fn($b) => in_array((int) $b['id'], $mine, true)));
 
         return Http::ok([
             'user' => [
