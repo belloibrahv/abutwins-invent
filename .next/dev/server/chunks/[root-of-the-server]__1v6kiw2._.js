@@ -1,0 +1,462 @@
+module.exports = [
+"[externals]/assert [external] (assert, cjs)", ((__turbopack_context__, module, exports) => {
+
+var mod = __turbopack_context__.x("assert", () => require("assert"));
+
+module.exports = mod;
+}),
+"[externals]/buffer [external] (buffer, cjs)", ((__turbopack_context__, module, exports) => {
+
+var mod = __turbopack_context__.x("buffer", () => require("buffer"));
+
+module.exports = mod;
+}),
+"[externals]/crypto [external] (crypto, cjs)", ((__turbopack_context__, module, exports) => {
+
+var mod = __turbopack_context__.x("crypto", () => require("crypto"));
+
+module.exports = mod;
+}),
+"[externals]/events [external] (events, cjs)", ((__turbopack_context__, module, exports) => {
+
+var mod = __turbopack_context__.x("events", () => require("events"));
+
+module.exports = mod;
+}),
+"[externals]/http [external] (http, cjs)", ((__turbopack_context__, module, exports) => {
+
+var mod = __turbopack_context__.x("http", () => require("http"));
+
+module.exports = mod;
+}),
+"[externals]/https [external] (https, cjs)", ((__turbopack_context__, module, exports) => {
+
+var mod = __turbopack_context__.x("https", () => require("https"));
+
+module.exports = mod;
+}),
+"[externals]/next/dist/compiled/@opentelemetry/api [external] (next/dist/compiled/@opentelemetry/api, cjs)", ((__turbopack_context__, module, exports) => {
+
+var mod = __turbopack_context__.x("next/dist/compiled/@opentelemetry/api", () => require("next/dist/compiled/@opentelemetry/api"));
+
+module.exports = mod;
+}),
+"[externals]/next/dist/compiled/next-server/app-page-turbo.runtime.dev.js [external] (next/dist/compiled/next-server/app-page-turbo.runtime.dev.js, cjs)", ((__turbopack_context__, module, exports) => {
+
+var mod = __turbopack_context__.x("next/dist/compiled/next-server/app-page-turbo.runtime.dev.js", () => require("next/dist/compiled/next-server/app-page-turbo.runtime.dev.js"));
+
+module.exports = mod;
+}),
+"[externals]/next/dist/compiled/next-server/app-route-turbo.runtime.dev.js [external] (next/dist/compiled/next-server/app-route-turbo.runtime.dev.js, cjs)", ((__turbopack_context__, module, exports) => {
+
+var mod = __turbopack_context__.x("next/dist/compiled/next-server/app-route-turbo.runtime.dev.js", () => require("next/dist/compiled/next-server/app-route-turbo.runtime.dev.js"));
+
+module.exports = mod;
+}),
+"[externals]/next/dist/server/app-render/action-async-storage.external.js [external] (next/dist/server/app-render/action-async-storage.external.js, cjs)", ((__turbopack_context__, module, exports) => {
+
+var mod = __turbopack_context__.x("next/dist/server/app-render/action-async-storage.external.js", () => require("next/dist/server/app-render/action-async-storage.external.js"));
+
+module.exports = mod;
+}),
+"[externals]/next/dist/server/app-render/after-task-async-storage.external.js [external] (next/dist/server/app-render/after-task-async-storage.external.js, cjs)", ((__turbopack_context__, module, exports) => {
+
+var mod = __turbopack_context__.x("next/dist/server/app-render/after-task-async-storage.external.js", () => require("next/dist/server/app-render/after-task-async-storage.external.js"));
+
+module.exports = mod;
+}),
+"[externals]/next/dist/server/app-render/work-async-storage.external.js [external] (next/dist/server/app-render/work-async-storage.external.js, cjs)", ((__turbopack_context__, module, exports) => {
+
+var mod = __turbopack_context__.x("next/dist/server/app-render/work-async-storage.external.js", () => require("next/dist/server/app-render/work-async-storage.external.js"));
+
+module.exports = mod;
+}),
+"[externals]/next/dist/server/app-render/work-unit-async-storage.external.js [external] (next/dist/server/app-render/work-unit-async-storage.external.js, cjs)", ((__turbopack_context__, module, exports) => {
+
+var mod = __turbopack_context__.x("next/dist/server/app-render/work-unit-async-storage.external.js", () => require("next/dist/server/app-render/work-unit-async-storage.external.js"));
+
+module.exports = mod;
+}),
+"[externals]/next/dist/server/runtime-reacts.external.js [external] (next/dist/server/runtime-reacts.external.js, cjs)", ((__turbopack_context__, module, exports) => {
+
+var mod = __turbopack_context__.x("next/dist/server/runtime-reacts.external.js", () => require("next/dist/server/runtime-reacts.external.js"));
+
+module.exports = mod;
+}),
+"[externals]/next/dist/shared/lib/no-fallback-error.external.js [external] (next/dist/shared/lib/no-fallback-error.external.js, cjs)", ((__turbopack_context__, module, exports) => {
+
+var mod = __turbopack_context__.x("next/dist/shared/lib/no-fallback-error.external.js", () => require("next/dist/shared/lib/no-fallback-error.external.js"));
+
+module.exports = mod;
+}),
+"[externals]/node:stream [external] (node:stream, cjs)", ((__turbopack_context__, module, exports) => {
+
+var mod = __turbopack_context__.x("node:stream", () => require("node:stream"));
+
+module.exports = mod;
+}),
+"[externals]/querystring [external] (querystring, cjs)", ((__turbopack_context__, module, exports) => {
+
+var mod = __turbopack_context__.x("querystring", () => require("querystring"));
+
+module.exports = mod;
+}),
+"[externals]/url [external] (url, cjs)", ((__turbopack_context__, module, exports) => {
+
+var mod = __turbopack_context__.x("url", () => require("url"));
+
+module.exports = mod;
+}),
+"[externals]/util [external] (util, cjs)", ((__turbopack_context__, module, exports) => {
+
+var mod = __turbopack_context__.x("util", () => require("util"));
+
+module.exports = mod;
+}),
+"[externals]/zlib [external] (zlib, cjs)", ((__turbopack_context__, module, exports) => {
+
+var mod = __turbopack_context__.x("zlib", () => require("zlib"));
+
+module.exports = mod;
+}),
+"[project]/src/app/api/auth/[...nextauth]/route.ts [app-route] (ecmascript)", ((__turbopack_context__) => {
+"use strict";
+
+__turbopack_context__.s([
+    "GET",
+    ()=>handler,
+    "POST",
+    ()=>handler
+]);
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2d$auth$2f$index$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next-auth/index.js [app-route] (ecmascript)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$auth$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/lib/auth.ts [app-route] (ecmascript)");
+;
+;
+const handler = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2d$auth$2f$index$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["default"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$auth$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["authOptions"]);
+;
+}),
+"[project]/src/lib/auth.ts [app-route] (ecmascript)", ((__turbopack_context__) => {
+"use strict";
+
+__turbopack_context__.s([
+    "authOptions",
+    ()=>authOptions
+]);
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2d$auth$2f$providers$2f$credentials$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next-auth/providers/credentials.js [app-route] (ecmascript)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$bcryptjs$2f$index$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/bcryptjs/index.js [app-route] (ecmascript)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$types$2f$index$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/types/index.ts [app-route] (ecmascript)");
+;
+;
+;
+// Mock user data for development (will be replaced with database)
+const mockUsers = [
+    {
+        id: "1",
+        email: "admin@abutwins.com",
+        password: "$2b$10$bpNZ3Ms8pECrVgpWccGGsuh5Gn/xEhXUVCk.bScu0ft4gmMXDBIg6",
+        name: "Super Admin",
+        role: __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$types$2f$index$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["UserRole"].SUPER_ADMIN,
+        branchId: null
+    },
+    {
+        id: "2",
+        email: "ceo@abutwins.com",
+        password: "$2b$10$dfo.c69plhSLN7BZpIAnRe/xBm71sJv1/AX7QUglwOcKZ04lFg5TS",
+        name: "CEO",
+        role: __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$types$2f$index$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["UserRole"].CEO,
+        branchId: null
+    }
+];
+const authOptions = {
+    providers: [
+        (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2d$auth$2f$providers$2f$credentials$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["default"])({
+            name: "credentials",
+            credentials: {
+                email: {
+                    label: "Email",
+                    type: "email"
+                },
+                password: {
+                    label: "Password",
+                    type: "password"
+                }
+            },
+            async authorize (credentials) {
+                if (!credentials?.email || !credentials?.password) {
+                    throw new Error("Invalid credentials");
+                }
+                // For development, use mock users
+                const user = mockUsers.find((u)=>u.email === credentials.email);
+                if (!user) {
+                    throw new Error("Invalid credentials");
+                }
+                // Simple password check for development
+                const isPasswordValid = await __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$bcryptjs$2f$index$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["compare"](credentials.password, user.password);
+                if (!isPasswordValid) {
+                    throw new Error("Invalid credentials");
+                }
+                return {
+                    id: user.id,
+                    email: user.email,
+                    name: user.name,
+                    role: user.role,
+                    branchId: user.branchId
+                };
+            }
+        })
+    ],
+    session: {
+        strategy: "jwt",
+        maxAge: 30 * 24 * 60 * 60
+    },
+    pages: {
+        signIn: "/login"
+    },
+    callbacks: {
+        async jwt ({ token, user }) {
+            if (user) {
+                token.id = user.id;
+                token.role = user.role;
+                token.branchId = user.branchId;
+            }
+            return token;
+        },
+        async session ({ session, token }) {
+            if (session.user) {
+                session.user.id = token.id;
+                session.user.role = token.role;
+                session.user.branchId = token.branchId;
+            }
+            return session;
+        }
+    },
+    secret: "your-secret-key-change-this-in-production-min-32-characters-long"
+};
+}),
+"[project]/src/types/index.ts [app-route] (ecmascript)", ((__turbopack_context__) => {
+"use strict";
+
+// Abu Twins Enterprise ERP - TypeScript Type Definitions
+// This file contains type definitions that complement the Prisma schema
+// Local UserRole enum for development (will be replaced with Prisma enum)
+__turbopack_context__.s([
+    "ApprovalStatus",
+    ()=>ApprovalStatus,
+    "ApprovalType",
+    ()=>ApprovalType,
+    "AuditAction",
+    ()=>AuditAction,
+    "ExpenseCategory",
+    ()=>ExpenseCategory,
+    "IMEIStatus",
+    ()=>IMEIStatus,
+    "LedgerEntryType",
+    ()=>LedgerEntryType,
+    "NotificationStatus",
+    ()=>NotificationStatus,
+    "NotificationType",
+    ()=>NotificationType,
+    "PaymentMethod",
+    ()=>PaymentMethod,
+    "ProductCondition",
+    ()=>ProductCondition,
+    "PurchaseStatus",
+    ()=>PurchaseStatus,
+    "ReconciliationStatus",
+    ()=>ReconciliationStatus,
+    "RepairStatus",
+    ()=>RepairStatus,
+    "ReturnOutcome",
+    ()=>ReturnOutcome,
+    "ReturnReason",
+    ()=>ReturnReason,
+    "ReturnStatus",
+    ()=>ReturnStatus,
+    "SaleStatus",
+    ()=>SaleStatus,
+    "SwapStatus",
+    ()=>SwapStatus,
+    "TransferStatus",
+    ()=>TransferStatus,
+    "UserRole",
+    ()=>UserRole
+]);
+var UserRole = /*#__PURE__*/ function(UserRole) {
+    UserRole["SUPER_ADMIN"] = "SUPER_ADMIN";
+    UserRole["CEO"] = "CEO";
+    UserRole["AUDITOR"] = "AUDITOR";
+    UserRole["ACCOUNTANT"] = "ACCOUNTANT";
+    UserRole["BRANCH_MANAGER"] = "BRANCH_MANAGER";
+    UserRole["VAULT_MANAGER"] = "VAULT_MANAGER";
+    UserRole["CASHIER"] = "CASHIER";
+    UserRole["SALES_EXECUTIVE"] = "SALES_EXECUTIVE";
+    UserRole["ENGINEER"] = "ENGINEER";
+    return UserRole;
+}({});
+var ProductCondition = /*#__PURE__*/ function(ProductCondition) {
+    ProductCondition["BRAND_NEW"] = "BRAND_NEW";
+    ProductCondition["OPEN_BOX"] = "OPEN_BOX";
+    ProductCondition["UK_USED"] = "UK_USED";
+    ProductCondition["REFURBISHED"] = "REFURBISHED";
+    ProductCondition["SWAP_DEVICE"] = "SWAP_DEVICE";
+    ProductCondition["FAULTY"] = "FAULTY";
+    ProductCondition["REPAIR_DEVICE"] = "REPAIR_DEVICE";
+    return ProductCondition;
+}({});
+var IMEIStatus = /*#__PURE__*/ function(IMEIStatus) {
+    IMEIStatus["IN_STOCK"] = "IN_STOCK";
+    IMEIStatus["TRANSFERRED"] = "TRANSFERRED";
+    IMEIStatus["SOLD"] = "SOLD";
+    IMEIStatus["RETURNED"] = "RETURNED";
+    IMEIStatus["REPAIRED"] = "REPAIRED";
+    IMEIStatus["SWAPPED"] = "SWAPPED";
+    IMEIStatus["DISPOSED"] = "DISPOSED";
+    IMEIStatus["FAULTY"] = "FAULTY";
+    return IMEIStatus;
+}({});
+var PurchaseStatus = /*#__PURE__*/ function(PurchaseStatus) {
+    PurchaseStatus["PENDING"] = "PENDING";
+    PurchaseStatus["ORDERED"] = "ORDERED";
+    PurchaseStatus["PARTIAL_RECEIVED"] = "PARTIAL_RECEIVED";
+    PurchaseStatus["RECEIVED"] = "RECEIVED";
+    PurchaseStatus["CANCELLED"] = "CANCELLED";
+    return PurchaseStatus;
+}({});
+var PaymentMethod = /*#__PURE__*/ function(PaymentMethod) {
+    PaymentMethod["CASH"] = "CASH";
+    PaymentMethod["TRANSFER"] = "TRANSFER";
+    PaymentMethod["POS"] = "POS";
+    PaymentMethod["CREDIT"] = "CREDIT";
+    PaymentMethod["SPLIT_PAYMENT"] = "SPLIT_PAYMENT";
+    return PaymentMethod;
+}({});
+var SaleStatus = /*#__PURE__*/ function(SaleStatus) {
+    SaleStatus["PENDING"] = "PENDING";
+    SaleStatus["COMPLETED"] = "COMPLETED";
+    SaleStatus["CANCELLED"] = "CANCELLED";
+    SaleStatus["REFUNDED"] = "REFUNDED";
+    return SaleStatus;
+}({});
+var ReturnReason = /*#__PURE__*/ function(ReturnReason) {
+    ReturnReason["FAULTY"] = "FAULTY";
+    ReturnReason["WARRANTY"] = "WARRANTY";
+    ReturnReason["CUSTOMER_DISSATISFACTION"] = "CUSTOMER_DISSATISFACTION";
+    ReturnReason["DAMAGED"] = "DAMAGED";
+    ReturnReason["SUPPLIER_RETURN"] = "SUPPLIER_RETURN";
+    ReturnReason["WRONG_PRODUCT"] = "WRONG_PRODUCT";
+    return ReturnReason;
+}({});
+var ReturnOutcome = /*#__PURE__*/ function(ReturnOutcome) {
+    ReturnOutcome["REPLACEMENT"] = "REPLACEMENT";
+    ReturnOutcome["REPAIR"] = "REPAIR";
+    ReturnOutcome["REFUND"] = "REFUND";
+    ReturnOutcome["CREDIT_NOTE"] = "CREDIT_NOTE";
+    return ReturnOutcome;
+}({});
+var ReturnStatus = /*#__PURE__*/ function(ReturnStatus) {
+    ReturnStatus["PENDING"] = "PENDING";
+    ReturnStatus["APPROVED"] = "APPROVED";
+    ReturnStatus["REJECTED"] = "REJECTED";
+    ReturnStatus["COMPLETED"] = "COMPLETED";
+    return ReturnStatus;
+}({});
+var SwapStatus = /*#__PURE__*/ function(SwapStatus) {
+    SwapStatus["PENDING"] = "PENDING";
+    SwapStatus["APPROVED"] = "APPROVED";
+    SwapStatus["REJECTED"] = "REJECTED";
+    SwapStatus["COMPLETED"] = "COMPLETED";
+    SwapStatus["CANCELLED"] = "CANCELLED";
+    return SwapStatus;
+}({});
+var RepairStatus = /*#__PURE__*/ function(RepairStatus) {
+    RepairStatus["PENDING"] = "PENDING";
+    RepairStatus["DIAGNOSING"] = "DIAGNOSING";
+    RepairStatus["REPAIRING"] = "REPAIRING";
+    RepairStatus["WAITING_PARTS"] = "WAITING_PARTS";
+    RepairStatus["COMPLETED"] = "COMPLETED";
+    RepairStatus["DELIVERED"] = "DELIVERED";
+    RepairStatus["CANCELLED"] = "CANCELLED";
+    return RepairStatus;
+}({});
+var TransferStatus = /*#__PURE__*/ function(TransferStatus) {
+    TransferStatus["PENDING"] = "PENDING";
+    TransferStatus["IN_TRANSIT"] = "IN_TRANSIT";
+    TransferStatus["RECEIVED"] = "RECEIVED";
+    TransferStatus["CANCELLED"] = "CANCELLED";
+    return TransferStatus;
+}({});
+var ExpenseCategory = /*#__PURE__*/ function(ExpenseCategory) {
+    ExpenseCategory["TRANSPORT"] = "TRANSPORT";
+    ExpenseCategory["FUEL"] = "FUEL";
+    ExpenseCategory["RENT"] = "RENT";
+    ExpenseCategory["UTILITIES"] = "UTILITIES";
+    ExpenseCategory["REPAIRS"] = "REPAIRS";
+    ExpenseCategory["SALARY"] = "SALARY";
+    ExpenseCategory["MISCELLANEOUS"] = "MISCELLANEOUS";
+    ExpenseCategory["MARKETING"] = "MARKETING";
+    return ExpenseCategory;
+}({});
+var ApprovalType = /*#__PURE__*/ function(ApprovalType) {
+    ApprovalType["PRICE_DISCOUNT"] = "PRICE_DISCOUNT";
+    ApprovalType["REFUND"] = "REFUND";
+    ApprovalType["STOCK_ADJUSTMENT"] = "STOCK_ADJUSTMENT";
+    ApprovalType["RECONCILIATION"] = "RECONCILIATION";
+    ApprovalType["EXPENSE"] = "EXPENSE";
+    ApprovalType["TRANSFER"] = "TRANSFER";
+    ApprovalType["SWAP"] = "SWAP";
+    ApprovalType["RETURN"] = "RETURN";
+    return ApprovalType;
+}({});
+var ApprovalStatus = /*#__PURE__*/ function(ApprovalStatus) {
+    ApprovalStatus["PENDING"] = "PENDING";
+    ApprovalStatus["APPROVED"] = "APPROVED";
+    ApprovalStatus["REJECTED"] = "REJECTED";
+    return ApprovalStatus;
+}({});
+var ReconciliationStatus = /*#__PURE__*/ function(ReconciliationStatus) {
+    ReconciliationStatus["IN_PROGRESS"] = "IN_PROGRESS";
+    ReconciliationStatus["PENDING_APPROVAL"] = "PENDING_APPROVAL";
+    ReconciliationStatus["APPROVED"] = "APPROVED";
+    ReconciliationStatus["REJECTED"] = "REJECTED";
+    return ReconciliationStatus;
+}({});
+var AuditAction = /*#__PURE__*/ function(AuditAction) {
+    AuditAction["CREATE"] = "CREATE";
+    AuditAction["UPDATE"] = "UPDATE";
+    AuditAction["DELETE"] = "DELETE";
+    AuditAction["LOGIN"] = "LOGIN";
+    AuditAction["LOGOUT"] = "LOGOUT";
+    AuditAction["APPROVE"] = "APPROVE";
+    AuditAction["REJECT"] = "REJECT";
+    AuditAction["EXPORT"] = "EXPORT";
+    AuditAction["IMPORT"] = "IMPORT";
+    return AuditAction;
+}({});
+var NotificationType = /*#__PURE__*/ function(NotificationType) {
+    NotificationType["LOW_STOCK"] = "LOW_STOCK";
+    NotificationType["PRICE_UPDATE"] = "PRICE_UPDATE";
+    NotificationType["APPROVAL_REQUEST"] = "APPROVAL_REQUEST";
+    NotificationType["DUE_PAYMENT"] = "DUE_PAYMENT";
+    NotificationType["TRANSFER"] = "TRANSFER";
+    NotificationType["RETURN"] = "RETURN";
+    NotificationType["SYSTEM"] = "SYSTEM";
+    return NotificationType;
+}({});
+var NotificationStatus = /*#__PURE__*/ function(NotificationStatus) {
+    NotificationStatus["UNREAD"] = "UNREAD";
+    NotificationStatus["READ"] = "READ";
+    NotificationStatus["ARCHIVED"] = "ARCHIVED";
+    return NotificationStatus;
+}({});
+var LedgerEntryType = /*#__PURE__*/ function(LedgerEntryType) {
+    LedgerEntryType["SALE"] = "SALE";
+    LedgerEntryType["PAYMENT"] = "PAYMENT";
+    LedgerEntryType["REFUND"] = "REFUND";
+    LedgerEntryType["ADJUSTMENT"] = "ADJUSTMENT";
+    LedgerEntryType["DISCOUNT"] = "DISCOUNT";
+    return LedgerEntryType;
+}({});
+}),
+];
+
+//# sourceMappingURL=%5Broot-of-the-server%5D__1v6kiw2._.js.map

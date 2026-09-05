@@ -1,0 +1,60 @@
+{
+  "node": {
+    "00a8cb36303f5563d7ab07ab01fc1632ecb72a36cb": {
+      "workers": {
+        "app/branches/page": {
+          "moduleId": "[project]/.next-internal/server/app/branches/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/app/actions/branches.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false,
+          "codeHash": null
+        }
+      },
+      "exportedName": "getBranches",
+      "filename": "src/app/actions/branches.ts"
+    },
+    "40745806869ed87a1be9d6354cdbfb8e37befe788e": {
+      "workers": {
+        "app/branches/page": {
+          "moduleId": "[project]/.next-internal/server/app/branches/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/app/actions/branches.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false,
+          "codeHash": null
+        }
+      },
+      "exportedName": "deactivateBranch",
+      "filename": "src/app/actions/branches.ts"
+    },
+    "40803e9258c762034d6ef4544447411929336e7550": {
+      "workers": {
+        "app/branches/page": {
+          "moduleId": "[project]/.next-internal/server/app/branches/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/app/actions/branches.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false,
+          "codeHash": null
+        }
+      },
+      "exportedName": "createBranch",
+      "filename": "src/app/actions/branches.ts"
+    },
+    "40c74c524086d83da6475eeea22358186d63a1acc6": {
+      "workers": {
+        "app/branches/page": {
+          "moduleId": "[project]/.next-internal/server/app/branches/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/app/actions/branches.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false,
+          "codeHash": null
+        }
+      },
+      "exportedName": "getBranch",
+      "filename": "src/app/actions/branches.ts"
+    },
+    "60bfd3d6d96f298de952a5a4a7d550e69357dd21fd": {
+      "workers": {
+        "app/branches/page": {
+          "moduleId": "[project]/.next-internal/server/app/branches/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/app/actions/branches.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false,
+          "codeHash": null
+        }
+      },
+      "exportedName": "updateBranch",
+      "filename": "src/app/actions/branches.ts"
+    }
+  },
+  "edge": {}
+}
